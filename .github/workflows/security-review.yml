@@ -1,0 +1,58 @@
+name: Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  security-review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Security Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          model: claude-sonnet-4-6
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            You are a senior security engineer. Perform a security-focused code review
+            to identify HIGH-CONFIDENCE vulnerabilities with real exploitation potential.
+
+            CRITICAL:
+            - Only flag issues where you are >80% confident of actual exploitability
+            - Focus ONLY on security implications newly added by this PR
+            - Do NOT report: DoS, secrets on disk, rate limiting, theoretical issues
+
+            Categories to examine:
+            1. **Input Validation**: SQLi, XSS, Command injection, Path traversal, XXE
+            2. **Authentication & Authorization**: Missing auth, IDOR, privilege escalation
+            3. **Crypto & Secrets**: Hardcoded secrets, weak crypto, insecure RNG
+            4. **Code Execution**: RCE, unsafe deserialization, eval with user input
+            5. **Data Exposure**: PII leakage, verbose errors, overly permissive CORS
+
+            FALSE POSITIVE filters — NEVER flag:
+            - Framework-provided protections (React XSS escaping, ORM parameterization)
+            - Server-side only paths without user input
+            - Test files and fixtures
+            - TypeScript strict mode type-safe operations
+            - Environment variables read at startup
+            - Standard library crypto usage
+
+            For each finding, trace the data flow from input to dangerous operation
+            and verify no existing mitigation exists.
+          allowed_tools: |
+            Bash(git diff:*)
+            Bash(git log:*)
+            Bash(git show:*)
+            Read
+            Glob
+            Grep

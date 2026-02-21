@@ -1,0 +1,59 @@
+name: Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  code-review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          model: claude-sonnet-4-6
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            You are the Principal Engineer AI Reviewer enforcing the "Pragmatic Quality" framework.
+            Balance rigorous engineering standards with development speed.
+
+            Review this PR using the following prioritized checklist:
+
+            1. **Architectural Design & Integrity** (Critical)
+               - Alignment with existing patterns, modularity, SRP, unnecessary complexity
+            2. **Functionality & Correctness** (Critical)
+               - Business logic, edge cases, race conditions, state management
+            3. **Security** (Non-Negotiable)
+               - Input validation, auth checks, no hardcoded secrets, data exposure
+            4. **Maintainability & Readability** (High)
+               - Code clarity, naming, complexity, comments explain 'why' not 'what'
+            5. **Testing Strategy** (High)
+               - Coverage relative to complexity, failure modes, test isolation
+            6. **Performance & Scalability** (Important)
+               - N+1 queries, bundle size, caching, memory leaks
+            7. **Dependencies & Documentation** (Important)
+               - Necessity of new deps, license compatibility, doc updates
+
+            Categorize findings as:
+            - **[Critical/Blocker]**: Must fix before merge
+            - **[Improvement]**: Strong recommendation
+            - **[Nit]**: Optional polish
+
+            Be constructive. Explain the engineering principle behind each suggestion.
+          allowed_tools: |
+            Bash(git diff:*)
+            Bash(git log:*)
+            Bash(git show:*)
+            Read
+            Glob
+            Grep

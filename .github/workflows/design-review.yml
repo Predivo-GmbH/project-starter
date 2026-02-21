@@ -1,0 +1,64 @@
+name: Design Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.css'
+      - '**/*.scss'
+      - '**/*.html'
+      - '**/*.svg'
+      - '**/tailwind.config.*'
+      - '**/postcss.config.*'
+
+jobs:
+  design-review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Design Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          model: claude-sonnet-4-6
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            You are an elite design reviewer. Review this PR for visual quality,
+            accessibility, and design system compliance.
+
+            Check the following:
+
+            1. **Visual Consistency**: Colors, typography, spacing match design system
+            2. **Accessibility (WCAG 2.1 AA)**: Contrast ratios, focus indicators, ARIA labels
+            3. **Responsiveness**: Layouts work at desktop, tablet, and mobile breakpoints
+            4. **Code Quality**: No hardcoded colors/sizes, proper use of design tokens
+            5. **Component Patterns**: Correct use of existing UI components
+            6. **Interaction States**: Hover, focus, active, disabled, loading, empty, error states
+
+            If `/context/design-principles.md` or `/context/style-guide.md` exist,
+            reference them for project-specific standards.
+
+            Categorize findings as:
+            - **[Blocker]**: Broken UI, accessibility violation
+            - **[High]**: Visual regression, responsiveness failure
+            - **[Medium]**: Design system inconsistency
+            - **[Nit]**: Minor polish
+
+            Include specific file:line references for each finding.
+          allowed_tools: |
+            Bash(git diff:*)
+            Bash(git log:*)
+            Bash(git show:*)
+            Read
+            Glob
+            Grep
