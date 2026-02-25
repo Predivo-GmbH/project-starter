@@ -1,0 +1,63 @@
+# Template deploy workflow — customize FTP paths and env vars per project.
+# The test+lint gates before build are MANDATORY for all projects.
+
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # --- VERIFICATION GATES (must pass before deploy) ---
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --run
+
+      - name: Build
+        run: npm run build
+        # env:
+        #   VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        #   VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      # --- DEPLOY (zero-downtime FTP) ---
+      # CUSTOMIZE: Update FTP paths below for your project
+      - name: Deploy via FTP (zero-downtime)
+        run: |
+          sudo apt-get install -y lftp
+          FTP_CONN="set ftp:ssl-allow yes; set ssl:verify-certificate no; set ftp:passive-mode yes; set net:max-retries 3; set net:reconnect-interval-base 5; open -u ${{ secrets.FTP_USER }},${{ secrets.FTP_PASS }} ${{ secrets.FTP_HOST }};"
+
+          # Step 1: Upload new hashed assets alongside old ones (no deletion yet)
+          lftp -e "
+            $FTP_CONN
+            mirror --reverse --no-perms --verbose ./dist/assets/ /YOUR_DOMAIN/assets/;
+            quit;
+          "
+
+          # Step 2: Upload index.html + root files (switches to new asset references)
+          lftp -e "
+            $FTP_CONN
+            put ./dist/index.html -o /YOUR_DOMAIN/index.html;
+            put ./dist/.htaccess -o /YOUR_DOMAIN/.htaccess;
+            quit;
+          "
+
+          # Step 3: Clean up stale assets no longer in the new build
+          lftp -e "
+            $FTP_CONN
+            mirror --reverse --delete --no-perms --verbose ./dist/assets/ /YOUR_DOMAIN/assets/;
+            quit;
+          "

@@ -39,12 +39,37 @@ Invoke the `@design-review` agent for thorough design validation when:
 
 ---
 
+## Verification Loop (MANDATORY)
+
+After ANY code change, verify before reporting completion:
+1. **Build** — `npm run build` must pass with zero TypeScript errors
+2. **Lint** — `npm run lint` must pass with zero errors
+3. **Test** — `npm test -- --run` must pass (all green)
+4. If any step fails, fix the issue before proceeding — do NOT move on with broken code
+
+For comprehensive validation, invoke the `@build-validator` agent.
+
+### Plan Before Building
+For non-trivial features (3+ files, new patterns, architectural changes):
+- Run `/plan` first to create a structured implementation plan
+- Wait for user approval before writing code
+- This prevents wasted effort from wrong approaches
+
+---
+
 ## Code Quality
 
 ### Before Creating PRs
 - Run `/code-review` for a comprehensive code quality check
 - Run `/security-review` for any changes touching auth, APIs, or data handling
 - Run `/design-review` for any visual/UI changes
+- Run `@build-validator` to verify build, tests, lint, and no debug artifacts
+
+### Learn From Mistakes
+After a PR review catches issues, run `/learn` to:
+- Extract recurring patterns from review feedback
+- Propose additions to this CLAUDE.md file
+- Prevent the same mistakes from happening again
 
 ### Rules
 - NO hardcoded hex colors or magic pixel values — use design tokens
