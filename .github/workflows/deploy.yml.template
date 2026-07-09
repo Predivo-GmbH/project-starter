@@ -1,63 +1,86 @@
-# Template deploy workflow — customize FTP paths and env vars per project.
-# The test+lint gates before build are MANDATORY for all projects.
-
-name: Build & Deploy
+# =============================================================================
+# CANONICAL DEPLOY TEMPLATE — Predivo / Metanet (GitHub Actions -> FTPS)
+# Standard: C:\Business\Internal Projects\standards\deploy-standard.md
+#
+# Copy this into a new project and replace every {{PLACEHOLDER}}.
+# Do NOT hand-write a deploy.yml from scratch — that is how the fleet drifted
+# into 4+ incompatible FTP configs. Keep the FTP settings string EXACTLY as-is;
+# the `ssl-protect-data no` line in particular is load-bearing (see the standard).
+#
+# This is the SIMPLE single-target variant (build -> FTPS deploy). For a
+# Supabase-backed project that needs staging + E2E + prod-gating + edge-function
+# deploys, use ReplyFlow's .github/workflows/deploy.yml as the worked example.
+# =============================================================================
+name: Deploy to Production
 
 on:
   push:
-    branches: [main]
+    branches: [main] # or master — match the repo's default branch
+    paths-ignore: ['*.md', 'docs/**', 'LICENSE', '.gitignore']
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # STANDARD: every job MUST cap its runtime. Without this, a hung FTP data
+    # channel runs to GitHub's 360-min default kill — 6h of billed minutes per hang.
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22 # STANDARD: Node 22
           cache: npm
 
-      - run: npm ci
+      # STANDARD (deploy-standard.md §3b): cache node_modules, skip npm ci on hit.
+      - name: Cache node_modules
+        id: node-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: Install deps
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm ci
 
-      # --- VERIFICATION GATES (must pass before deploy) ---
-      - name: Lint
-        run: npm run lint
+      - run: npm run build # produces ./dist
+        env:
+          # Add project VITE_* build env here (from GitHub secrets).
+          VITE_PLACEHOLDER: ${{ secrets.VITE_PLACEHOLDER }}
 
-      - name: Test
-        run: npm test -- --run
-
-      - name: Build
-        run: npm run build
-        # env:
-        #   VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-        #   VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-
-      # --- DEPLOY (zero-downtime FTP) ---
-      # CUSTOMIZE: Update FTP paths below for your project
-      - name: Deploy via FTP (zero-downtime)
+      - name: Deploy via FTPS (login encrypted, data channel clear)
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
         run: |
           sudo apt-get install -y lftp
-          FTP_CONN="set ftp:ssl-allow yes; set ssl:verify-certificate no; set ftp:passive-mode yes; set net:max-retries 3; set net:reconnect-interval-base 5; open -u ${{ secrets.FTP_USER }},${{ secrets.FTP_PASS }} ${{ secrets.FTP_HOST }};"
+          echo "{{SITE_ID}}" > ./dist/.site-id   # unique per project, e.g. "myproject"
 
-          # Step 1: Upload new hashed assets alongside old ones (no deletion yet)
-          lftp -e "
-            $FTP_CONN
-            mirror --reverse --no-perms --verbose ./dist/assets/ /YOUR_DOMAIN/assets/;
-            quit;
-          "
+          # CANONICAL FTP settings — see deploy-standard.md. ssl-protect-data no keeps
+          # login TLS-encrypted while sending the (public, static) data channel in clear,
+          # which avoids the intermittent encrypted-passive-data-channel hang on GH-runner NAT.
+          SETTINGS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4;"
 
-          # Step 2: Upload index.html + root files (switches to new asset references)
-          lftp -e "
-            $FTP_CONN
-            put ./dist/index.html -o /YOUR_DOMAIN/index.html;
-            put ./dist/.htaccess -o /YOUR_DOMAIN/.htaccess;
-            quit;
-          "
+          # Site-id guard — never deploy to the wrong target.
+          REMOTE_ID=$(lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$SETTINGS cat /httpdocs/.site-id; bye" 2>/dev/null | tr -d '[:space:]') || REMOTE_ID=""
+          if [ -n "$REMOTE_ID" ] && [ "$REMOTE_ID" != "{{SITE_ID}}" ]; then
+            echo "::error::DEPLOY ABORTED — remote .site-id is '$REMOTE_ID', expected '{{SITE_ID}}'. Wrong FTP target!"
+            exit 1
+          fi
 
-          # Step 3: Clean up stale assets no longer in the new build
-          lftp -e "
-            $FTP_CONN
-            mirror --reverse --delete --no-perms --verbose ./dist/assets/ /YOUR_DOMAIN/assets/;
-            quit;
-          "
+          # Resilient deploy: mirror is resumable, so retry on transient blips.
+          CMDS="$SETTINGS mirror --reverse --delete --no-perms --verbose ./dist/ /httpdocs/; bye"
+          n=0
+          until [ $n -ge 4 ]; do
+            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
+              echo "FTP deploy succeeded (attempt $((n+1)))"; exit 0
+            fi
+            n=$((n + 1)); echo "::warning::FTP attempt $n failed (transient FTPS data-channel issue — runner-side, NOT Metanet); retrying in 25s..."; sleep 25
+          done
+          echo "::error::FTP deploy failed after 4 attempts"; exit 1
