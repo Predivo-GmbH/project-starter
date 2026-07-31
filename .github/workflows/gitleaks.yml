@@ -1,0 +1,28 @@
+name: Secret Scan (gitleaks)
+
+# Blocks secrets from entering the repo. On PRs it scans the PR commits; on
+# pushes to the default branch it scans history. Free for user-owned repos
+# (no GITLEAKS_LICENSE needed). Pair with GitHub push protection where the plan
+# allows it (public repos are free). Anon/publishable Supabase keys are safe to
+# expose by design (RLS-protected) — if a scan flags one, add it to
+# .gitleaksignore with a comment rather than hiding a real secret.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so PR/commit range scanning works
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
