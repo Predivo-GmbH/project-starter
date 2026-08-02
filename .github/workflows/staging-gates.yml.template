@@ -1,0 +1,60 @@
+name: v11 Staging Gates
+
+# Runs the v11 hardened audit gates (e2e/staging/v11-gates.spec.ts) against the LIVE staging
+# site after every deploy + weekly. A red run IS the alert (same model as the fleet grant-drift
+# + gate-coverage guards). The production-monitor "v11 Gate Coverage Guard" checks that this
+# workflow exists and is green for every required app — so keep it here and keep it passing.
+#
+# SCAFFOLD TODO on new-project creation:
+#   1. Set `workflows: [...]` below to THIS project's deploy workflow name (see deploy.yml `name:`).
+#   2. Add the GH secrets the spec needs: STAGING_HTPASSWD_USER/PASS (if the staging site is
+#      basic-auth'd), <PROJECT>_MGMT_TOKEN (Supabase Management API sbp_ token), and
+#      <PROJECT>_SVC_KEY (staging sb_secret, for storage teardown) — rename the env keys to match.
+
+on:
+  workflow_run:
+    workflows: ['Deploy'] # TODO(v11): match this project's deploy workflow `name:`
+    types: [completed]
+  schedule:
+    - cron: '30 6 * * 1' # weekly Mon 06:30 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: v11-staging-gates
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Run v11 hardened gates against staging
+        run: npx playwright test --config playwright.v11-gates.config.ts
+        env:
+          STAGING_HTPASSWD_USER: ${{ secrets.STAGING_HTPASSWD_USER }}
+          STAGING_HTPASSWD_PASS: ${{ secrets.STAGING_HTPASSWD_PASS }}
+          # TODO(v11): rename to <PROJECT>_MGMT_TOKEN / <PROJECT>_SVC_KEY to match the spec + your secrets
+          PROJECT_MGMT_TOKEN: ${{ secrets.PROJECT_MGMT_TOKEN }}
+          PROJECT_SVC_KEY: ${{ secrets.PROJECT_SVC_KEY }}
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v11-gates-report
+          path: playwright-report/

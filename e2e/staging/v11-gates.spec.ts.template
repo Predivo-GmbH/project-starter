@@ -1,0 +1,98 @@
+import { test, expect, type Page } from '@playwright/test'
+
+/**
+ * v11 hardened audit gates — driven against the LIVE staging site.
+ *
+ * ┌─ HOW TO FILL THIS IN (copy from a shipped reference, they are the worked examples) ─────────┐
+ * │  Simplest / password-gate app:     C:\Business\Internal Projects\BoatBuddy\e2e\staging\v11-gates.spec.ts
+ * │  Real Supabase-auth app:           C:\Business\Internal Projects\SignalScore\e2e\staging\v11-gates.spec.ts
+ * │  See e2e/staging/README.md for the checklist + the gauntlet-decoupling gotcha (#1).          │
+ * └─────────────────────────────────────────────────────────────────────────────────────────────┘
+ *
+ * Gate M (deploy-identity) + Gate K (fault-injection) below are GENERIC — fill the two constants
+ * and the route list and they run as-is. Gate A (viewport reachability), Gate B/J (commit-boundary
+ * + orphan), and Gate I (1000-row data-volume) are app-specific — implement them from the reference.
+ * If a gate has no target in this app (no upload flow, no unbounded list), mark it N/A with a
+ * comment — do NOT delete the class silently and do NOT fake a pass.
+ */
+
+// TODO(v11): the staging + prod Supabase project refs (from docs/Credentials.txt / .env).
+const STAGING_REF = 'CHANGEME_staging_ref'
+const PROD_REF = 'CHANGEME_prod_ref'
+const MGMT = process.env.PROJECT_MGMT_TOKEN ?? '' // Supabase Management API sbp_ token (DB snapshots/seed)
+const MARKER = 'ZZ_V11GATE_DELETE_ME'
+
+// Management API (superuser SQL; bypasses the 1000-cap for seed/count/cleanup).
+async function sql<T = Record<string, unknown>>(query: string): Promise<T[]> {
+  const res = await fetch(`https://api.supabase.com/v1/projects/${STAGING_REF}/database/query`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${MGMT}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  })
+  if (!res.ok) throw new Error(`mgmt query ${res.status}: ${await res.text()}`)
+  return res.json()
+}
+
+// TODO(v11): establish an authenticated + unlocked session for this app (copy the app's
+// e2e/staging auth.setup pattern: Supabase password-grant session in localStorage, and/or a
+// PasswordGate sessionStorage bypass). For a public-only app this may be a no-op.
+async function unlock(page: Page) {
+  await page.goto('/')
+  // e.g. await page.evaluate(() => sessionStorage.setItem('<app>-unlocked', 'true'))
+}
+
+test.describe('v11 gates', () => {
+  test.beforeEach(async ({ page }) => { await unlock(page) })
+
+  // ── Gate A — constrained-viewport reachability (APP-SPECIFIC) ──────────────────────────────
+  // For EVERY modal/dialog/sheet + multi-field form: open it, prove the primary action is
+  // reachable at MIN height {390x844, 375x360 kb-open, 812x375 & 667x375 landscape} via
+  // getBoundingClientRect + elementFromPoint hit-test (scroll-container allowance ok).
+  test.skip('Gate A — TODO: implement from reference', async () => {})
+
+  // ── Gate B/J — commit-boundary + orphan residue (APP-SPECIFIC; N/A if no mutation/upload) ──
+  // Assert NO DB row before explicit Save; abandon (Esc/Cancel/backdrop) leaves 0 residue;
+  // exactly 1 row on Save; marker-scoped teardown + PRE-CLEAN stale ZZ_V11GATE% rows at start.
+  test.skip('Gate B/J — TODO: implement from reference (or mark N/A)', async () => {})
+
+  // ── Gate I — correctness under real data volume (APP-SPECIFIC) ─────────────────────────────
+  // Seed >1000 rows in the main list table via `sql()`; assert the app's DISPLAYED count/total
+  // reflects ALL of them (read the RENDERED output — summing network responses masks a per-request
+  // cap). Clean up BEFORE asserting. Fix any truncation with src/lib/fetchAllRows.ts.
+  test.skip('Gate I — TODO: implement from reference', async () => {})
+
+  // ── Gate K — fault-injected data loads render gracefully (GENERIC — fill the routes) ───────
+  const ROUTES = ['/', '/dashboard'] // TODO(v11): the app's authenticated data routes
+  for (const mode of ['500', 'empty'] as const) {
+    for (const route of ROUTES) {
+      test(`Gate K — ${route} graceful under ${mode}`, async ({ page }) => {
+        await page.route(/\/rest\/v1\/.*/, (r) =>
+          mode === '500'
+            ? r.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"injected"}' })
+            : r.fulfill({ status: 200, contentType: 'application/json', headers: { 'content-range': '*/0' }, body: '[]' }))
+        const errors: string[] = []
+        page.on('pageerror', (e) => errors.push(e.message))
+        await page.goto(route)
+        await page.waitForTimeout(6000)
+        const bodyText = (await page.locator('body').innerText().catch(() => '')).trim()
+        expect.soft(bodyText.length, `${route} ${mode}: not a white screen`).toBeGreaterThan(20)
+        expect.soft(errors.length, `${route} ${mode}: no uncaught page errors`).toBe(0)
+      })
+    }
+  }
+
+  // ── Gate M — deployed-bundle identity (GENERIC — fill the refs above) ──────────────────────
+  // Proves the staging bundle talks to the STAGING backend, never prod — also the guard that
+  // makes the write-gates safe (they can't be mutating prod).
+  test('Gate M — staging bundle talks to STAGING, never prod', async ({ page }) => {
+    const hosts = new Set<string>()
+    page.on('request', (r) => { const u = r.url(); if (u.includes('.supabase.co')) hosts.add(new URL(u).host) })
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+    for (let i = 0; i < 25 && hosts.size === 0; i++) await page.waitForTimeout(300)
+    const hostList = [...hosts]
+    console.log(`[GATE M] supabase hosts: ${JSON.stringify(hostList)}`)
+    expect(hostList.some((h) => h.startsWith(STAGING_REF)), `talks to STAGING (${STAGING_REF})`).toBe(true)
+    expect(hostList.some((h) => h.startsWith(PROD_REF)), 'must NOT touch PROD supabase').toBe(false)
+  })
+})
