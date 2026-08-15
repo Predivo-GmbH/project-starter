@@ -1,0 +1,305 @@
+# =============================================================================
+# CANONICAL DEPLOY TEMPLATE — Supabase-backed, staging-gated variant
+# Standard: C:\Business\Internal Projects\standards\deploy-standard.md
+#
+# Copy this into a Supabase-backed project as .github/workflows/deploy.yml and
+# replace every {{PLACEHOLDER}}. This is the FULL variant: push -> validate ->
+# staging deploy -> E2E gate; PRODUCTION only via manual workflow_dispatch
+# (confirm=deploy). The worked, in-production example is ReplyFlow's deploy.yml.
+#
+# Do NOT hand-write a deploy.yml from scratch — that is how the fleet drifted
+# into incompatible configs. Keep the FTP settings string and the load-bearing
+# lines below EXACTLY as-is:
+#   - ssl-protect-data no           (§1: fixes the intermittent FTPS hang)
+#   - supabase/setup-cli version: PINNED, never `latest`   (§3c)
+#   - `supabase functions deploy ... --use-api`            (§3c)
+#   - staging-alive check = RETRY LOOP, not a single curl  (§3d)
+#   - prod job gated on workflow_dispatch + confirm=deploy (§4)
+#
+# {{PLACEHOLDERS}} to fill:
+#   {{BRANCH}}              default branch (main | master)
+#   {{PROD_DOMAIN}}         e.g. myproject.com  or  myproject.predivo.ch
+#   {{STAGING_DOMAIN}}      e.g. staging.myproject.com
+#   {{STAGING_VHOST_PATH}}  Plesk vhost path for staging .htpasswd
+#   {{SITE_ID}}             unique prod marker, e.g. myproject
+#   {{STAGING_SITE_ID}}     unique staging marker, e.g. myproject-staging
+#   {{PROD_REF}}            prod Supabase project ref
+#   {{STAGING_REF}}         staging Supabase project ref
+#   {{CLI_VERSION}}         pinned Supabase CLI version (currently 2.109.1)
+# =============================================================================
+name: Deploy to Production
+
+on:
+  # Push to {{BRANCH}} runs validate -> staging -> E2E ONLY. Production is NOT
+  # deployed automatically — it needs a manual run ("ask before production", §4).
+  push:
+    branches: [{{BRANCH}}]
+    paths-ignore: ['*.md', 'docs/**', 'LICENSE', '.gitignore']
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm PRODUCTION deploy'
+        required: true
+        default: ''
+
+concurrency:
+  group: deploy-production
+  # Queue, never cancel — a cancelled prod deploy mid-FTP leaves the site half-updated.
+  cancel-in-progress: false
+
+jobs:
+  validate-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache node_modules
+        id: node-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: Install deps
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test -- --run
+
+  deploy-staging:
+    needs: validate-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache node_modules
+        id: node-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: Install deps
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Build for staging
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+
+      - name: Prepare staging .htaccess (real prod config + Basic auth + noindex)
+        run: |
+          # Start from the REAL production .htaccess so staging catches Apache
+          # syntax errors BEFORE they can reach production (pre-action Rule 51).
+          mv dist/.htaccess /tmp/prod.htaccess
+          {
+            echo 'AuthType Basic'
+            echo 'AuthName "Staging"'
+            echo 'AuthUserFile {{STAGING_VHOST_PATH}}/.htpasswd'
+            echo 'Require valid-user'
+            echo ''
+            cat /tmp/prod.htaccess
+            echo ''
+            echo '# --- Staging overrides: never index staging ---'
+            echo '<IfModule mod_headers.c>'
+            echo '  Header always set X-Robots-Tag "noindex, nofollow"'
+            echo '</IfModule>'
+          } > dist/.htaccess
+
+      - name: Deploy staging via FTP
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.STAGING_FTP_USER }}
+          FTP_PASS: ${{ secrets.STAGING_FTP_PASS }}
+        run: |
+          sudo apt-get install -y lftp
+          echo "{{STAGING_SITE_ID}}" > ./dist/.site-id
+          # CANONICAL FTP settings — ssl-protect-data no is load-bearing (§1).
+          CMDS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4; mirror --reverse --delete --no-perms --verbose --exclude .htpasswd --exclude cgi-bin/ ./dist/ {{STAGING_DOMAIN}}/; bye"
+          n=0
+          until [ $n -ge 4 ]; do
+            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
+              echo "Staging FTP deploy succeeded (attempt $((n+1)))"; exit 0
+            fi
+            n=$((n + 1)); echo "::warning::Staging FTP attempt $n failed (transient runner-side FTPS blip); retrying in 25s..."; sleep 25
+          done
+          echo "::error::Staging FTP deploy failed after 4 attempts"; exit 1
+
+      # §3c: PINNED CLI version (never `latest`) + --use-api (no Docker/esm.sh).
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: {{CLI_VERSION}}
+      - name: Deploy edge functions to staging
+        run: supabase functions deploy $(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_*' -printf '%f ') --project-ref {{STAGING_REF}} --use-api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  e2e-staging:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache node_modules
+        id: node-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: Install deps
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # §3d: staging-alive gate as a RETRY LOOP — survives transient curl
+      # failures (exit 23 mid-transfer), not just non-200s. A single
+      # `curl --retry` is NOT enough (it retries the HTTP request, not a
+      # connection reset after headers).
+      - name: Verify staging is alive (catches .htaccess errors)
+        run: |
+          for i in 1 2 3 4 5 6; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -u "${{ secrets.STAGING_HTPASSWD_USER }}:${{ secrets.STAGING_HTPASSWD_PASS }}" https://{{STAGING_DOMAIN}} --max-time 30 || echo 000)
+            if [ "$STATUS" = "200" ]; then echo "Staging health check passed (HTTP $STATUS, attempt $i)"; exit 0; fi
+            echo "::warning::Staging check attempt $i/6 got HTTP $STATUS - retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::Staging returned HTTP $STATUS after 6 attempts - likely .htaccess error. Blocking production deploy."
+          exit 1
+
+      - name: Run staging E2E tests
+        run: npm run test:e2e:staging
+        env:
+          STAGING_URL: https://{{STAGING_DOMAIN}}
+          STAGING_HTPASSWD_USER: ${{ secrets.STAGING_HTPASSWD_USER }}
+          STAGING_HTPASSWD_PASS: ${{ secrets.STAGING_HTPASSWD_PASS }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-e2e-results
+          path: playwright-report/
+
+  # §4c (feature-coverage) + §4d (security): MANDATORY blocking pre-prod gates. Both run on the
+  # workflow_dispatch prod promotion (and gate-security also on schedule), never on a routine push,
+  # and prod `deploy` needs them — so production cannot promote unless coverage AND security are green.
+  gate-coverage:
+    if: github.event_name == 'workflow_dispatch' # release-time gate (deploy-standard.md §4c)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install deps
+        run: npm ci
+      - name: Feature-coverage gate (NO continue-on-error — red = fail = no prod)
+        run: node scripts/check-feature-coverage.mjs
+
+  gate-security:
+    if: github.event_name != 'push' # nightly + prod promotion, not every staging push (deploy-standard.md §4d)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Dependency audit (blocking; floor=critical, tighten to high once the project is clean)
+        run: npm audit --audit-level=critical
+
+  deploy:
+    needs: [e2e-staging, gate-coverage, gate-security]
+    # §4: PRODUCTION only via manual dispatch with typed confirmation. A push to
+    # {{BRANCH}} never reaches this job (staging + E2E only).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache node_modules
+        id: node-cache
+        uses: actions/cache@v5
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - name: Install deps
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Deploy via FTP (zero-downtime)
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
+        run: |
+          sudo apt-get install -y lftp
+          echo "{{SITE_ID}}" > ./dist/.site-id
+          SETTINGS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4;"
+          # Site-id guard — never deploy to the wrong target.
+          REMOTE_ID=$(lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$SETTINGS cat /httpdocs/.site-id; bye" 2>/dev/null | tr -d '[:space:]') || REMOTE_ID=""
+          if [ -n "$REMOTE_ID" ] && [ "$REMOTE_ID" != "{{SITE_ID}}" ]; then
+            echo "::error::DEPLOY ABORTED — remote .site-id is '$REMOTE_ID', expected '{{SITE_ID}}'. Wrong FTP target!"
+            exit 1
+          fi
+          # Zero-downtime: assets first (no delete), then full mirror with delete.
+          CMDS="$SETTINGS mirror --reverse --no-perms --verbose ./dist/assets/ /httpdocs/assets/; mirror --reverse --delete --no-perms --verbose ./dist/ /httpdocs/; bye"
+          n=0
+          until [ $n -ge 4 ]; do
+            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
+              echo "Production FTP deploy succeeded (attempt $((n+1)))"; exit 0
+            fi
+            n=$((n + 1)); echo "::warning::Production FTP attempt $n failed (transient runner-side FTPS blip); retrying in 25s..."; sleep 25
+          done
+          echo "::error::Production FTP deploy failed after 4 attempts"; exit 1
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: {{CLI_VERSION}}
+      - name: Deploy edge functions to production
+        run: supabase functions deploy $(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_*' -printf '%f ') --project-ref {{PROD_REF}} --use-api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
