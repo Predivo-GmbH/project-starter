@@ -17,7 +17,8 @@
  *                                              //   framer-motion whileInView content is caught
  *     "hero": { "selector": "section[aria-label=\"Hero\"]" },  // exact hero region (beats generic guess)
  *     "cta": { "regex": "loslegen|starten|get|start|try|demo", "flags": "i" }, // action-word matcher (localise!)
- *     "thresholds": { "maxLinks": 12, "maxHeroVh": 160, "maxFontSizes": 8, "maxHeroLinks": 5 },
+ *     "thresholds": { "maxLinks": 12, "maxHeroVh": 160, "maxFontSizes": 8, "maxHeroLinks": 5,
+ *                     "maxLcpMs": 3000, "maxCls": 0.1, "maxTransferKb": 2500, "maxJsKb": 1200 },  // perf budget (G8)
  *     "skipGates": ["type-scale"]              // gate names to disable for this project (use sparingly)
  *   }
  * Only the keys you set are overridden; everything else keeps the KB default. CLI url/route win over config.
@@ -55,6 +56,12 @@ const T = {
   maxHeroVh: route === 'C' ? 100 : 90,            // false bottom kills scroll; Route C relaxes it
   maxFontSizes: 8,                                // distinct rendered font-sizes above the fold
   maxHeroLinks: 5,                                // clickables inside the hero (aim ~1 primary)
+  // Performance budget (G8, DESIGN §0.0c "PageSpeed = release-blocker"). Core Web Vitals "good"
+  // thresholds; a poor score FAILS the gate. Override per project in design-lint.config.json.
+  maxLcpMs: 3000,                                 // Largest Contentful Paint (CWV good ≤2500; 3000 = ship floor)
+  maxCls: 0.1,                                    // Cumulative Layout Shift (CWV good ≤0.1)
+  maxTransferKb: 2500,                            // total bytes over the wire (0 on localhost — see note)
+  maxJsKb: 1200,                                  // JS bytes over the wire
   ...(cfg.thresholds || {}),
 };
 const heroSelector = cfg.hero?.selector || '[data-hero], header, main > section, body > section, section';
@@ -123,6 +130,34 @@ try {
     fail(`a11y:${v.id}`, `${v.impact}: ${v.help} (${v.nodes.length} node(s)) ${where ? '→ ' + where : ''}`);
   }
 } catch (e) { fail('a11y:scan', `axe failed: ${e.message}`); }
+
+// --- Performance budget (G8 / §0.0c PageSpeed release-blocker) ---
+// Core Web Vitals measured in-page (LCP, CLS via buffered PerformanceObserver) + wire-weight from
+// the resource timing API. No extra dependency — same Chromium as the rest of the lint. Note:
+// transferSize is 0 for same-origin localhost/preview without proper headers, so on a local preview
+// the weight gates read 0 (pass); LCP/CLS still measure. Point the lint at a real staging/prod URL
+// for a true weight budget. Skippable per project via skipGates: ["perf-lcp","perf-cls",...].
+try {
+  const perf = await page.evaluate(() => new Promise((res) => {
+    let lcp = 0, cls = 0;
+    try {
+      new PerformanceObserver((l) => { for (const e of l.getEntries()) lcp = Math.max(lcp, e.renderTime || e.loadTime || e.startTime || 0); }).observe({ type: 'largest-contentful-paint', buffered: true });
+      new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) cls += e.value; }).observe({ type: 'layout-shift', buffered: true });
+    } catch { /* browser without CWV observers — LCP/CLS stay 0, gates pass */ }
+    let totalKb = 0, jsKb = 0;
+    for (const r of performance.getEntriesByType('resource')) {
+      const kb = (r.transferSize || 0) / 1024; totalKb += kb;
+      if (/\.m?js(\?|$)/i.test(r.name || '') || r.initiatorType === 'script') jsKb += kb;
+    }
+    const nav = performance.getEntriesByType('navigation')[0];
+    if (nav) totalKb += (nav.transferSize || 0) / 1024;
+    setTimeout(() => res({ lcp: Math.round(lcp), cls: Math.round(cls * 1000) / 1000, totalKb: Math.round(totalKb), jsKb: Math.round(jsKb) }), 600);
+  }));
+  if (perf.lcp > T.maxLcpMs) fail('perf-lcp', `LCP ${perf.lcp}ms (budget ${T.maxLcpMs}ms — Core Web Vitals)`);
+  if (perf.cls > T.maxCls) fail('perf-cls', `CLS ${perf.cls} (budget ${T.maxCls})`);
+  if (perf.totalKb > T.maxTransferKb) fail('perf-weight', `${perf.totalKb}KB transferred (budget ${T.maxTransferKb}KB)`);
+  if (perf.jsKb > T.maxJsKb) fail('perf-js', `${perf.jsKb}KB JS over the wire (budget ${T.maxJsKb}KB)`);
+} catch (e) { fail('perf:scan', `perf measurement failed: ${e.message}`); }
 
 // --- Mobile skim: H1/CTA above the fold at 390px ---
 await page.setViewportSize({ width: 390, height: 844 });
