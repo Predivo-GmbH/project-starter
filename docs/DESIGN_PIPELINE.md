@@ -50,7 +50,8 @@ Calibrating rule of thumb: set `hero.selector` to the real hero landmark (not `<
 | Components | 21st.dev MCP + shadcn MCP | **21st.dev migrated to HTTP `21st.dev/api/mcp` 2026-08-11, needs `/mcp` auth next session**; shadcn TBD |
 | Mockup | Stitch (explore) · Claude Design (polish, dedicated browser) · Pencil.dev (IDE-native, repo JSON) | pick per route |
 | Editorial/animated builder | Framer + Unframer MCP (Framer→code) | NEW — fit-check before adoption |
-| Assets | Higgsfield (Nano Banana/GPT Image 2 stills, Seedance 2.0 motion) · Recraft (logo/vector) | in use |
+| Assets (stills) | Higgsfield image menu — surface the FULL set (`skills/higgsfield/image-models.md`), do not default to one: **Soul 2.0** (FREE, 5,000 gens, 2K, Soul ID character consistency — the cost-first pick) · **Seedream 5.0 Lite / 4.5** (up to 4K, unlimited batch — high-res) · **Nano Banana 2/Pro** (character/reference + text rendering) · **GPT Image 2** (design/text edit + refinement) · **Recraft** (logo/vector). | in use |
+| Assets (motion) | Higgsfield **Seedance 2.0** | in use |
 | Motion | Framer Motion / GSAP (GPU transforms) | in stack |
 | QA | web-design-guidelines · design-taste-frontend · Lighthouse · axe | installed |
 
@@ -229,8 +230,21 @@ Lightweight review of all screens before any code: consistency, content complete
 **Who:** AI, automated.
 1. Kill + restart dev server.
 2. Puppeteer at 1920x1080 (standard) and deviceScaleFactor=2 (retina); also check mobile width.
-3. Compare rendered page vs the approved Stitch design; measure alignment programmatically.
+3. Compare rendered page vs the approved mockup (whichever tool produced it — Stitch / Claude Design 2.0 / Pencil.dev); measure alignment programmatically.
 4. Console error check. All delivery gates pass -> ship.
+
+## Design Review Gate
+
+The human sign-off that ends the design pipeline — the anchor the Cockpit branch steps reference by
+`doc_ref` (the `review` gate on the `design` / `mockup` branches, the `client-review` gate on the
+client-facing `prototype` branch, and `design_approved` inside the `new` branch's design step). It is
+posted via `post_gate('review'|'client-review', 'pass', <receipt>)`:
+- **Enters on:** the §0.0c enforcement loop passing (design-lint exit 0 + the `design-review` skill's
+  multi-viewport pass, Step 0.7) AND the VALIDATE checks above green.
+- **Receipt required:** the approved mockup/screens (link or file) — for the client `prototype`, the
+  polished clickable build the customer will see; a gate cannot PASS on a claim.
+- **Human call:** Roger for internal `design`/`mockup`; the client for `prototype`. This is a real
+  decision gate — automation runs the loop up to it, the human approves it (the design invariant).
 
 ---
 
