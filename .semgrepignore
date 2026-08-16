@@ -1,0 +1,23 @@
+# Semgrep scan scope (backlog #10). SAST looks at OUR code for injection / XSS / hardcoded
+# secrets — a different layer than `npm audit` (which only checks dependencies). Test files are
+# EXCLUDED: they legitimately contain example tokens and escaping-assertion fixtures that semgrep
+# mistakes for real findings (verified 2026-08-15 on ReplyFlow — 2 of 3 findings were a test's
+# `ya29…EXAMPLE…` token and an XSS-escaping test assertion). Scan real code only.
+*.test.ts
+*.test.tsx
+*.test.mjs
+*.test.js
+*.spec.ts
+*.spec.tsx
+*_test.ts
+__tests__/
+test/
+tests/
+e2e/
+*.stories.tsx
+*.stories.ts
+# build output + vendored code (semgrep skips node_modules by default; listed for clarity)
+dist/
+build/
+node_modules/
+coverage/

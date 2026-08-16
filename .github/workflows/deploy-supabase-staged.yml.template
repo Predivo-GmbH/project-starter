@@ -225,7 +225,7 @@ jobs:
   gate-security:
     if: github.event_name != 'push' # nightly + prod promotion, not every staging push (deploy-standard.md §4d)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
@@ -240,6 +240,14 @@ jobs:
           cache: npm
       - name: Dependency audit (blocking; floor=critical, tighten to high once the project is clean)
         run: npm audit --audit-level=critical
+      # SAST — code-level security (backlog #10). Different layer than npm audit (which only checks
+      # dependencies): semgrep reads OUR code for injection / XSS / hardcoded secrets. `.semgrepignore`
+      # excludes test files (they carry example tokens + escaping-assertion fixtures = false positives).
+      # --severity=ERROR limits to highest-confidence rules; --error makes a real finding fail the gate.
+      - name: SAST scan (semgrep)
+        run: |
+          python3 -m pip install --quiet semgrep
+          semgrep scan --config=p/security-audit --config=p/secrets --severity=ERROR --error --metrics=off .
 
   deploy:
     needs: [e2e-staging, gate-coverage, gate-security]
