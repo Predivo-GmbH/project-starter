@@ -22,6 +22,12 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **Design Principles** | `context/design-principles.md` | Customizable design checklist template |
 | **Style Guide** | `context/style-guide.md` | Customizable brand style guide template |
 | **CLAUDE.md Template** | `CLAUDE.md.template` | Base CLAUDE.md with visual development section |
+| **Deploy Workflow (static)** | `.github/workflows/deploy.yml.template` | Metanet FTP zero-downtime deploy (lint→typecheck→test→build→FTP) |
+| **Deploy Workflow (Supabase-staged)** | `.github/workflows/deploy-supabase-staged.yml.template` | Full push→validate→staging→E2E chain, **manual prod gate**, pinned Supabase CLI + `--use-api`, retrying staging-alive check. Use for any Supabase-backed project. See `standards/deploy-standard.md`. |
+| **Keep-Alive Workflow** | `.github/workflows/keep-alive.yml.template` | Ping Supabase free-tier every 2 days to prevent pause |
+| **Auth Helper** | `supabase/functions/_shared/auth.template.ts` | JWT auth + admin/user client factory for edge functions |
+| **CORS Helper** | `supabase/functions/_shared/cors.template.ts` | Dynamic CORS with origin allowlist |
+| **SPA .htaccess** | `public/.htaccess.template` | Apache rewrite for client-side routing on Metanet |
 | **MCP Config Template** | `.mcp.json.template` | Team-shared Playwright MCP config |
 
 ---
@@ -66,13 +72,27 @@ cp -r /path/to/project-starter/.claude .claude
 cp -r /path/to/project-starter/.github .github
 cp -r /path/to/project-starter/context context
 cp /path/to/project-starter/CLAUDE.md.template CLAUDE.md
+
+# If using Supabase:
+mkdir -p supabase/functions/_shared
+cp /path/to/project-starter/supabase/functions/_shared/auth.template.ts supabase/functions/_shared/auth.ts
+cp /path/to/project-starter/supabase/functions/_shared/cors.template.ts supabase/functions/_shared/cors.ts
+
+# SPA routing for Metanet:
+mkdir -p public
+cp /path/to/project-starter/public/.htaccess.template public/.htaccess
 ```
 
 ### Step 2: Customize
 
-1. **`CLAUDE.md`** — Fill in project name, stack, dev server URL, project-specific rules
+1. **`CLAUDE.md`** — Fill in project name, stack, dev server URL, Supabase/deployment config, project-specific rules
 2. **`context/design-principles.md`** — Replace `<!-- CUSTOMIZE -->` sections with your design system
 3. **`context/style-guide.md`** — Replace with your brand colors, typography, component specs
+4. **Deploy workflow** — Rename ONE to `.github/workflows/deploy.yml`, fill placeholders:
+   - Static site → `deploy.yml.template` (replace `[SUBDOMAIN]` and `[APP_DIR]`)
+   - Supabase-backed → `deploy-supabase-staged.yml.template` (replace the `{{PLACEHOLDERS}}`; this is the one with the manual prod gate + staging E2E). Then add the project to the Deploy-Status dashboard (`FLEET` array in BackOffice's `deploy-status` edge fn).
+5. **`.github/workflows/keep-alive.yml.template`** — Rename to `keep-alive.yml` (if Supabase free tier)
+6. **`supabase/functions/_shared/cors.ts`** — Replace `[SUBDOMAIN]` with your actual subdomain
 
 ### Step 3 (Optional): Team MCP Config
 

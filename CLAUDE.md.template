@@ -3,8 +3,8 @@
 <!-- CUSTOMIZE: Replace bracketed values with your project specifics -->
 
 ## Stack
-- [e.g., React 18 + TypeScript + Vite, Tailwind + shadcn/ui, TanStack Query]
-- [e.g., Supabase backend, 60+ Edge Functions]
+- [e.g., React 19 + TypeScript + Vite 8, Tailwind 4 + shadcn/ui, TanStack Query v5]
+- [e.g., Supabase backend (PostgreSQL + Edge Functions in Deno)]
 
 ## Dev Server
 - URL: [e.g., http://localhost:8080]
@@ -146,11 +146,69 @@ When encountering bugs or unexpected failures:
 
 ---
 
+## Supabase Edge Functions
+
+<!-- CUSTOMIZE: Remove this section if not using Supabase -->
+
+### Deno Import Patterns
+```typescript
+import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+```
+
+### Shared Helpers
+- `supabase/functions/_shared/auth.ts` — `authenticateRequest()`, `errorResponse()`, `jsonResponse()`
+- `supabase/functions/_shared/cors.ts` — `getCorsHeaders()`, `corsHeaders`
+
+### Edge Function Pattern
+Every edge function follows this structure:
+```typescript
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: getCorsHeaders(req) })
+  }
+  try {
+    const { user, adminClient } = await authenticateRequest(req)
+    // ... business logic ...
+    return jsonResponse({ success: true })
+  } catch (err) {
+    return errorResponse(err)
+  }
+})
+```
+
+### Deploy Edge Functions
+```bash
+supabase functions deploy <function-name>
+```
+
+---
+
+## Deployment (Metanet FTP)
+
+<!-- CUSTOMIZE: Update subdomain and app directory -->
+
+- **Target:** `[SUBDOMAIN].predivo.ch`
+- **CI/CD:** GitHub Actions → lint → typecheck → test → build → FTP deploy
+- **Strategy:** Zero-downtime (assets first → index.html → cleanup stale)
+- **FTP credentials:** Stored as GitHub Secrets (`FTP_HOST`, `FTP_USER`, `FTP_PASS`)
+- **NEVER deploy to Vercel** — always use Metanet FTP
+
+### GitHub Secrets Required
+| Secret | Purpose |
+|--------|---------|
+| `FTP_HOST` | Metanet FTP host |
+| `FTP_USER` | FTP username |
+| `FTP_PASS` | FTP password |
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key |
+
+---
+
 ## Project-Specific Rules
 
 <!-- CUSTOMIZE: Add your project-specific rules here. Examples: -->
 
-<!-- - Do NOT deploy to Vercel unless explicitly asked -->
-<!-- - Edge functions: deploy without asking -->
 <!-- - Use `globals: true` in Vitest — do NOT import from 'vitest' -->
 <!-- - All edge functions must be deployed with `--no-verify-jwt` -->
+<!-- - OTP config: 6 digits, 600 seconds expiry -->

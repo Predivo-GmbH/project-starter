@@ -1,0 +1,12 @@
+# SPA routing for Metanet FTP hosting.
+# All non-file requests redirect to index.html for client-side routing.
+# Copy to your project's public/.htaccess (Vite copies public/ to dist/ on build).
+
+RewriteEngine On
+
+# If the request is not a file
+RewriteCond %{REQUEST_FILENAME} !-f
+# If the request is not a directory
+RewriteCond %{REQUEST_FILENAME} !-d
+# Redirect to index.html
+RewriteRule ^ index.html [L]

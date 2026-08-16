@@ -7,14 +7,9 @@
 # into 4+ incompatible FTP configs. Keep the FTP settings string EXACTLY as-is;
 # the `ssl-protect-data no` line in particular is load-bearing (see the standard).
 #
-# This is the SIMPLE single-target variant (build -> FTPS deploy): push -> prod
-# is acceptable for STATIC-ONLY projects (deploy-standard.md section 4).
-# SUPABASE-BACKED projects MUST NOT keep this shape: they are staging-first —
-# push deploys STAGING only; PRODUCTION deploys ONLY via manual
-# workflow_dispatch with a typed confirm=deploy input, and the promotion must
-# NOT re-run the staging chain (standard sections 4/4a). Use ReplyFlow's
-# .github/workflows/deploy.yml as the worked staging-first example
-# (see also Phase 2.5 STEP 10.5 of the One-Person AI Business workflow).
+# This is the SIMPLE single-target variant (build -> FTPS deploy). For a
+# Supabase-backed project that needs staging + E2E + prod-gating + edge-function
+# deploys, use ReplyFlow's .github/workflows/deploy.yml as the worked example.
 # =============================================================================
 name: Deploy to Production
 
