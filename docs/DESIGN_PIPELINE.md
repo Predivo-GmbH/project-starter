@@ -5,7 +5,7 @@
 > (predivo `REDESIGN-HANDOFF.md`, any `ONE_PERSON_AI_BUSINESS_WORKFLOW.md` "Step 0", project
 > `.claude/commands/design-*`, etc.) disagrees with this file, **this file wins** and the other is stale.
 > **PROCESS > TOOLS (see §0). Route-first (§0.0). Tools = STITCH, CLAUDE DESIGN 2.0, or PENCIL.DEV — co-equal, pick per ROUTE (§0.0d + Step 0.3).** The OLD standalone Pencil `.pen` tool (used Feb-Apr 2026) is superseded; but **Pencil.dev RELAUNCHED Jan-2026** (IDE-native VS Code/Cursor, Claude-Code MCP, repo-JSON `.pen`) is RE-ADOPTED as a co-equal mockup option (Roger 2026-08-11). Figma / Bolt / Vercel-as-pipeline remain not-adopted.
-> Last updated: 2026-08-18 (**§0.2 LOGO reworked: Recraft RETIRED for logos → Higgsfield reference-style transfer (Flux Kontext + Nano Banana 2)**, framed as the general EXAMPLE-DRIVEN "style-from-refs + subject-brief" factory method — pick a rendering-style group from the logo reference library + write a subject brief; mechanics + subject-control OPEN fix documented; executor table + pipeline diagram updated; proven route = R-LOGO-01. Roger sign-off via task dispatch; evidence = tool test 2026-08-17/18. Prior: 2026-08-15 Mobbin MCP promoted from "future / needs-auth" to **LIVE + VERIFIED** default reference-research executor — updated §0.0d table + §0.1; verified this session via `search_flows`/`search_screens` returning real salon-booking references; Roger directive: the real-reference pull must be a documented step when creating any UI). Prior: 2026-08-11 (§0 added: process-thesis + ROUTE SELECTION + automation-as-artifacts + enforcement LOOP + tool executor table, from `DESIGN_METHODOLOGY_KB_SYNTHESIS_2026-08-11.md`; Pencil.dev re-adopted; approved by Roger). Prior: 2026-07-14 (Mobbin added as a curated reference source in Step 0.1 + a sourcing note in Step 0.6b — inspiration input, NOT a new stage or a Stitch/Claude-Design replacement; approved by Roger). Prior: 2026-07-02 (Claude Design 2.0 promoted to a co-equal path with Stitch, approved by Roger — reverses the June "Stitch-only / do NOT adopt Claude Design" stance). Prior: 2026-06-18.
+> Last updated: 2026-08-18 (**§0.1 LOGO ROUTE decision tree added (wordmark vs mark → style group → subject line, mandatory brief fields) + §0.2 recipe validated end-to-end: refs + subject + explicit style qualities + subject-first wording → candidates → human pick + mandatory originality check vs refs**; Recraft RETIRED for logos → Higgsfield reference-style transfer (Flux Kontext + Nano Banana 2), framed as the general EXAMPLE-DRIVEN "style-from-refs + subject-brief" factory method; executor table + pipeline diagram updated; proven route = R-LOGO-01. Roger sign-off via task dispatch; evidence = tool test 2026-08-17/18 incl. corrected result downloads. Prior: 2026-08-15 Mobbin MCP promoted from "future / needs-auth" to **LIVE + VERIFIED** default reference-research executor — updated §0.0d table + §0.1; verified this session via `search_flows`/`search_screens` returning real salon-booking references; Roger directive: the real-reference pull must be a documented step when creating any UI). Prior: 2026-08-11 (§0 added: process-thesis + ROUTE SELECTION + automation-as-artifacts + enforcement LOOP + tool executor table, from `DESIGN_METHODOLOGY_KB_SYNTHESIS_2026-08-11.md`; Pencil.dev re-adopted; approved by Roger). Prior: 2026-07-14 (Mobbin added as a curated reference source in Step 0.1 + a sourcing note in Step 0.6b — inspiration input, NOT a new stage or a Stitch/Claude-Design replacement; approved by Roger). Prior: 2026-07-02 (Claude Design 2.0 promoted to a co-equal path with Stitch, approved by Roger — reverses the June "Stitch-only / do NOT adopt Claude Design" stance). Prior: 2026-06-18.
 
 ---
 
@@ -102,6 +102,16 @@ VALIDATE        -> Puppeteer/screenshot checks vs the approved mockup
 
 AI asks clarifying questions only for what it cannot determine from the references, then proposes a direction for approval.
 
+### LOGO ROUTE decision (mandatory at DEFINE — added 2026-08-18, Roger)
+
+The brief is **incomplete until the three logo decisions are recorded** — they are the human-owned half of the logo method (AI proposes options, human picks):
+
+1. **Wordmark or generated mark?** A wordmark is a TYPE task — typeset the name in the brand font (e.g. Fraunces). Zero credits, no AI generation, and the correct choice for many prototypes. A generated mark goes through §0.2.
+2. **If mark: which rendering-style group** from the logo reference library (taste call, informed by the brand direction).
+3. **If mark: the subject line** — one line, what the mark depicts (e.g. "scissors", "an upward S"). It never comes from the refs.
+
+Record the answers in DESIGN_BRIEF.md (e.g. `Logo: wordmark` or `Logo: mark, style S1, subject "…"`). Step 0.2 refuses to run without them.
+
 ### Step 0.1a — AI-PROPOSES-REFERENCES mode (DEFAULT when the business/product type is known) [ADDED 2026-08-14, Roger]
 
 The human is NOT required to supply reference examples. When the product and business type are known, the AI **proposes** the references so the human only has to pick/veto (they keep the option to hand over their own, but it is not a prerequisite). Sequence:
@@ -130,23 +140,20 @@ Timing rule: **do the reference research at the DEFINE step, not before it is re
 
 ### The method — EXAMPLE-DRIVEN generation ("style-from-refs + subject-brief")
 
-This is the **general factory method** for any generative step: **pick a curated STYLE (learned from reference examples) + write a SUBJECT brief → reference-condition the model.** Logos are the FIRST instance; the same shape generalizes to UI, ad creative, images, and video (a design system from examples — the same thing we do for UI). **Load-bearing principle (proven from our own outputs): references transfer STYLE + COMPOSITION, never SUBJECT.** Role split: **AI = style executor; human owns taste (which style) + intent (the subject).** A reference set alone is never a full brief.
+This is the **general factory method** for any generative step: **pick a curated STYLE (learned from reference examples) + write a SUBJECT brief → reference-condition the model.** Logos are the FIRST instance; the same shape generalizes to UI, ad creative, images, and video (a design system from examples — the same thing we do for UI). **Load-bearing principle (proven from our own outputs): references transfer STYLE; the subject comes from the written brief — with explicit style qualities and subject-first wording it lands (validated 2026-08-18 on scissors, foxes, and 8 style groups).** Role split: **AI = style executor; human owns taste (which style) + intent (the subject).** A reference set alone is never a full brief.
 
-**Steps:**
-1. **Pick the rendering-STYLE group** whose drawing approach fits the brand, from the logo reference library `C:\Business\Knowledge Base\logo-reference-library\` (INDEX.md = rules + statuses; groups are S1–S13, defined by *how a mark is drawn*, NOT by shape-motif or subject). E.g. S1-soft-organic-mono-solid (Roger's validated soft-organic family), S2-flat-geometric-facet, etc.
-2. **Write the SUBJECT** in one line — what the mark depicts (e.g. "a rising signal bar"). This is the human's intent; it does NOT come from the refs.
-3. **Prompt = style descriptor (from the group) + subject.** Feed the group's 3–5 reference marks to Higgsfield. Refs carry the look; the prompt carries the subject.
+**Steps (the VALIDATED recipe — 2026-08-18, receipts `logo-reference-library/_pool/val/real_*.png`):**
+1. **Read the LOGO ROUTE from the 0.1 brief** (wordmark vs mark). If wordmark → typeset the name in the brand font, done — no generation, no credits.
+2. **Pick the style group** (human taste) and take its refs (raster PNG, ≤4 for Kontext / more for NB2).
+3. **Prompt = subject + EXPLICIT style qualities:** *"Logo mark of <subject> — <style qualities spelled out>"* (e.g. "soft, rounded, organic flowing curves, flat monochrome, no sharp edges"). NEVER "keep the exact same style" — the backend enhancer (always on) guesses from the anchor's geometry. Put the subject first so the enhancer doesn't inject ref subjects.
+4. **Generate 3–4 candidates (1.5 cr each; `generate cost` free preflight first), human picks.** **ONE route at a time — single generation, inspect, decide. Never batched unreviewed credit volleys** (Roger protocol 2026-08-18). On API errors (e.g. 503), check `generate list` before retrying — the job may have completed server-side.
+5. **Originality check (mandatory):** iconic refs CAN leak through (Craft petals clone; Google-Ads echo) — diff every candidate against the refs; reject lookalikes.
 
 **Higgsfield mechanics (the exact route that worked — R-LOGO-01):**
-- `media_upload` → returns a **presigned PUT** URL; do the PUT via a **curl SCRIPT FILE**, never inline — signed URLs contain characters that break inline single-quoting in bash.
-- `media_confirm` with `type: image` to register each uploaded ref.
-- `generate_image` with `medias[].role`:
-  - **Flux Kontext:** role = `image_references`, **CAP 4 refs** (422 error over 4).
-  - **Nano Banana 2:** role = `image` (resolves to nano_banana_flash).
-- **`get_cost: true` = FREE preflight** — it submits no job and is NOT a spend; always price a run this way first.
-- **Refs must be raster PNG** — SVG uploads are rejected. Rasterize library SVGs first (resvg / `@resvg/resvg-js`).
-
-**Subject-control caveat (OPEN fix — do not skip):** in the 2026-08-18 one-shot validation the model cloned the DOMINANT reference's composition/subject (Duolingo owl, Flickr dots) instead of drawing the prompted subject — i.e. **an iconic ref hijacks composition.** Open fix to apply/test: use **compositionally diverse refs** (no single iconic mark dominating) + a **subject-first prompt** — *"draw a NEW mark of X; do not copy the reference shapes."* Style transfer is proven; subject control is the residual work.
+- CLI (used 2026-08-18): `higgsfield generate create flux_kontext --prompt "..." --aspect_ratio 1:1 --image-references <anchor.png> --image-references <ref2.png> ... --wait`. MCP alternative: `media_upload` → presigned PUT via a **curl SCRIPT FILE**, never inline (signed URLs break inline single-quoting) → `media_confirm` `type: image` → `generate_image` with `medias[].role`.
+- **Flux Kontext:** role = `image_references`, **CAP 4 refs** (422 over 4), **ref 1 = the anchor that drives output**. **Nano Banana 2:** role = `image` (resolves to nano_banana_flash).
+- **`generate cost` / `get_cost: true` = FREE preflight** — submits no job, is NOT a spend; always price a run first.
+- **Refs must be raster PNG** — SVG uploads are rejected. Rasterize library SVGs first (`@resvg/resvg-js`, script `logo-reference-library/_pool/rasterize.mjs`).
 
 > Optional: vectorize the chosen raster mark (e.g. Recraft `vectorize_image`, or resvg-traced) and build the lockup/favicon variants from it. Recraft's *vectorizer/bg-removal* utilities remain fine; only Recraft-as-the-logo-GENERATOR is retired.
 
