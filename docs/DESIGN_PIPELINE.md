@@ -4,8 +4,8 @@
 > **This is the ONE canonical design workflow for every Predivo GmbH product.** If any other doc
 > (predivo `REDESIGN-HANDOFF.md`, any `ONE_PERSON_AI_BUSINESS_WORKFLOW.md` "Step 0", project
 > `.claude/commands/design-*`, etc.) disagrees with this file, **this file wins** and the other is stale.
-> **PROCESS > TOOLS (see §0). Route-first (§0.0). Tools = STITCH, CLAUDE DESIGN 2.0, or PENCIL.DEV — co-equal, pick per ROUTE (§0.0d + Step 0.3).** The OLD standalone Pencil `.pen` tool (used Feb-Apr 2026) is superseded; but **Pencil.dev RELAUNCHED Jan-2026** (IDE-native VS Code/Cursor, Claude-Code MCP, repo-JSON `.pen`) is RE-ADOPTED as a co-equal mockup option (Roger 2026-08-11). Figma / Bolt / Vercel-as-pipeline remain not-adopted.
-> Last updated: 2026-08-18 (**§0.1 LOGO ROUTE decision tree added (wordmark vs mark → style group → subject line, mandatory brief fields) + §0.2 recipe validated end-to-end: refs + subject + explicit style qualities + subject-first wording → candidates → human pick + mandatory originality check vs refs**; Recraft RETIRED for logos → Higgsfield reference-style transfer (Flux Kontext + Nano Banana 2), framed as the general EXAMPLE-DRIVEN "style-from-refs + subject-brief" factory method; executor table + pipeline diagram updated; proven route = R-LOGO-01. Roger sign-off via task dispatch; evidence = tool test 2026-08-17/18 incl. corrected result downloads. Prior: 2026-08-15 Mobbin MCP promoted from "future / needs-auth" to **LIVE + VERIFIED** default reference-research executor — updated §0.0d table + §0.1; verified this session via `search_flows`/`search_screens` returning real salon-booking references; Roger directive: the real-reference pull must be a documented step when creating any UI). Prior: 2026-08-11 (§0 added: process-thesis + ROUTE SELECTION + automation-as-artifacts + enforcement LOOP + tool executor table, from `DESIGN_METHODOLOGY_KB_SYNTHESIS_2026-08-11.md`; Pencil.dev re-adopted; approved by Roger). Prior: 2026-07-14 (Mobbin added as a curated reference source in Step 0.1 + a sourcing note in Step 0.6b — inspiration input, NOT a new stage or a Stitch/Claude-Design replacement; approved by Roger). Prior: 2026-07-02 (Claude Design 2.0 promoted to a co-equal path with Stitch, approved by Roger — reverses the June "Stitch-only / do NOT adopt Claude Design" stance). Prior: 2026-06-18.
+> **PROCESS > TOOLS (see §0). Route-first (§0.0). The UI design route = RECONSTRUCTION (Step 0.3): Mobbin composition + Firecrawl real tokens + agent code build + ONE signature element (proven route R-DESIGN-03).** Stitch and Pencil.dev are RETIRED as design tools (2026-08-18); Claude Design serves only as an optional AUDIT/review surface via its MCP, never as the generator. Figma / Bolt / Vercel-as-pipeline remain not-adopted.
+> Last updated: 2026-08-18 (Step 0.3 REWORKED: generative mockup tools retired → RECONSTRUCTION route R-DESIGN-03 — Wave-1 audit proof on Hair Dresser: v1 Fresha=sloppy, v2 Mercury=high-end, v3+signature=Roger-approved; Stitch has no image input, Claude Design chat is plan-limit-coupled; Claude Design MCP unlocked as audit/review surface). Prior: 2026-08-18 (**§0.1 LOGO ROUTE decision tree added (wordmark vs mark → style group → subject line, mandatory brief fields) + §0.2 recipe validated end-to-end: refs + subject + explicit style qualities + subject-first wording → candidates → human pick + mandatory originality check vs refs**; Recraft RETIRED for logos → Higgsfield reference-style transfer (Flux Kontext + Nano Banana 2), framed as the general EXAMPLE-DRIVEN "style-from-refs + subject-brief" factory method; executor table + pipeline diagram updated; proven route = R-LOGO-01. Roger sign-off via task dispatch; evidence = tool test 2026-08-17/18 incl. corrected result downloads. Prior: 2026-08-15 Mobbin MCP promoted from "future / needs-auth" to **LIVE + VERIFIED** default reference-research executor — updated §0.0d table + §0.1; verified this session via `search_flows`/`search_screens` returning real salon-booking references; Roger directive: the real-reference pull must be a documented step when creating any UI). Prior: 2026-08-11 (§0 added: process-thesis + ROUTE SELECTION + automation-as-artifacts + enforcement LOOP + tool executor table, from `DESIGN_METHODOLOGY_KB_SYNTHESIS_2026-08-11.md`; Pencil.dev re-adopted; approved by Roger). Prior: 2026-07-14 (Mobbin added as a curated reference source in Step 0.1 + a sourcing note in Step 0.6b — inspiration input, NOT a new stage or a Stitch/Claude-Design replacement; approved by Roger). Prior: 2026-07-02 (Claude Design 2.0 promoted to a co-equal path with Stitch, approved by Roger — reverses the June "Stitch-only / do NOT adopt Claude Design" stance). Prior: 2026-06-18.
 
 ---
 
@@ -48,7 +48,8 @@ Calibrating rule of thumb: set `hero.selector` to the real hero landmark (not `<
 |---|---|---|
 | Reference research | Mobbin (premium, dedicated Chrome) + Firecrawl scrape | Mobbin browser works now; **MCP LIVE + VERIFIED 2026-08-15 (`api.mobbin.com/mcp`) — `search_flows`/`search_screens`/`search_sections` return real shipped refs. This is the DEFAULT reference-research executor: pull real refs FIRST, then DEFINE (§0.1a).** |
 | Components | 21st.dev MCP + shadcn MCP | **21st.dev migrated to HTTP `21st.dev/api/mcp` 2026-08-11, needs `/mcp` auth next session**; shadcn TBD |
-| Mockup | Stitch (explore) · Claude Design (polish, dedicated browser) · Pencil.dev (IDE-native, repo JSON) | pick per route |
+| UI build (was "Mockup") | RECONSTRUCTION: Mobbin MCP (composition/coverage) + Firecrawl branding scrape (real tokens) + agent code build — NO generative mockup tool (R-DESIGN-03) | ✅ PROVEN 2026-08-18 (Hair Dresser v3) |
+| Review surface (optional) | Claude Design via MCP (write_files, pin-comment loop) — AUDIT function only, never generator | consent granted 2026-08-18 |
 | Editorial/animated builder | Framer + Unframer MCP (Framer→code) | NEW — fit-check before adoption |
 | Assets (stills) | Higgsfield image menu — surface the FULL set (`skills/higgsfield/image-models.md`), do not default to one: **Soul 2.0** (FREE, 5,000 gens, 2K, Soul ID character consistency — the cost-first pick) · **Seedream 5.0 Lite / 4.5** (up to 4K, unlimited batch — high-res) · **Nano Banana 2/Pro** (character/reference + text rendering) · **GPT Image 2** (design/text edit + refinement) · **Recraft** — RETIRED for logos (missed the style, ~50x cost); vectorizer/bg-removal utilities OK. | in use |
 | **Logos** | **Higgsfield reference-style transfer — Flux Kontext + Nano Banana 2** (style-from-refs + subject-brief, §0.2 + R-LOGO-01). **Recraft RETIRED** for logo generation. | in use (2026-08-18) |
@@ -60,7 +61,7 @@ Calibrating rule of thumb: set `hero.selector` to the real hero landmark (not `<
 
 ## Core rules (read first)
 
-- **FIRST pick the ROUTE (§0.0), THEN the mockup tool: STITCH, CLAUDE DESIGN 2.0, or PENCIL.DEV — co-equal, choose per route (§0.0d + Step 0.3).** Whichever produces the approved screens IS the final visual reference. There is NO rebuild step in a third tool. After the mockup is approved, all further refinement happens **in code**. Default heuristic: **Stitch** for a fully-MCP-automated run; **Claude Design 2.0** when Stitch's known flakiness stalls iteration, when you want Figma-like direct canvas editing, or when the same project also needs a pitch deck / animated prototype.
+- **FIRST pick the ROUTE (§0.0), THEN run the RECONSTRUCTION build (Step 0.3): human picks the reference product, Mobbin + Firecrawl + agent code build produce the screens. The approved HTML IS the final visual reference; all further refinement happens in code.**
 - **Brand book = standalone HTML** document, styled in the brand's own design language (not built in any design tool).
 - **Iterate STRUCTURE first (sections, content, UX flow), then POLISH (colors, shadows, spacing, tokens).** Never polish while structure still needs work.
 - **Mockups are free to iterate; code is expensive.** Get the design right in the mockup tool before writing code.
@@ -165,51 +166,18 @@ This is the **general factory method** for any generative step: **pick a curated
 
 ---
 
-## Step 0.3 — MOCKUP (Design-Language Discovery)
+## Step 0.3 — UI BUILD (Reconstruction route — R-DESIGN-03)
 
-**Tool: STITCH or CLAUDE DESIGN 2.0 — co-equal, pick per situation (approved 2026-07-02).** This is where the visual identity is discovered and locked. Whichever tool produces the approved screens becomes the final visual reference; iterate the **landing page only** to approval before scaling to other screens.
+**No generative mockup tool.** Stitch and Pencil.dev are retired as design tools (2026-08-18); Claude Design is an optional review surface only. The design never crosses a text boundary: every stage hands the next a concrete artifact.
 
-**Which tool?**
-- **Stitch** (`mcp__stitch__*` MCP) — default for a **fully-MCP-automated** run where Claude drives everything headlessly.
-- **Claude Design 2.0** ([claude.ai/design](https://claude.ai/design), manual login, or the desktop app) — when Stitch's known flakiness stalls iteration, when you want **Figma-like direct canvas editing** (click an element, change text/font/color/weight — no re-prompt, no token burn), when you're seeding from an **existing design system** (import from a GitHub repo / tokens / markdown), or when the project also needs a **pitch deck / animated prototype** (PPTX/PDF/animation export). Handoff: export **ZIP → drag into a Claude Code project → build in our repo → deploy to Metanet** (no Vercel required). Has **Firecrawl** (same brand-scrape as Step 0.1) + Higgsfield MCP connectors and a `/design-sync` skill to port a system between Code and Design. Tradeoff: **no `claude-design` MCP** yet, so it is less scriptable than Stitch — expect a manual login step.
-- **Running both in parallel** (opt-in): generate in both, user picks the winner, remaining screens go only in the winner.
+1. **REFERENCE PICK (human).** AI proposes 3 candidate reference products at the right craft level (Mobbin pulls + one-line rationale + anti-pattern call-out). The human picks — this is the decisive taste call; the reference's craft is the ceiling.
+2. **COVERAGE + COMPOSITION (Mobbin MCP, 0 cr).** Pull per-screen reference images for EVERY screen incl. states (login, dashboard, empty/error/onboarding/paywall). Output: screen map — each screen bound to 1–2 reference images.
+3. **TOKENS (Firecrawl, ~1–2 cr).** `/v2/scrape` `formats:["branding"]` on the reference's live site → `design-tokens.json` (real hex/type/radius/spacing) + deliberate identity deltas. Never eyeball values from rasters.
+4. **BUILD (agent, code-native).** Per screen: reference image (composition) + tokens (values) + brief (content/IA) → plain HTML/CSS. Code IS the mockup; the deliverable is openable HTML.
+5. **SIGNATURE (mandatory).** Add ONE owned distinctive element per product — otherwise the result is an anonymous clone.
+6. **QA + AUDIT.** Visual diff per screen vs its reference + design-lint loop until pass. Optional: publish into Claude Design via its MCP (`write_files`, not generation) for Roger's pin-comment review loop (list_comments → revise → ack_comments).
 
-**Process (either tool):**
-1. Create the project.
-2. Generate ~5 landing-page variations, each with a **different style direction** (informed by the DESIGN_BRIEF references). Always pass the **full Design Context Prefix** (the 0.1 brief data + 0.2 logo description).
-3. Run a **4-agent expert evaluation** (Web Designer, UX Designer, Copywriter, CRO Specialist) over the variations.
-4. Auto-generate a **refined prompt** combining the winning elements.
-5. **Iterate WITH the user until the design language is approved** — STRUCTURE first (sections, content, UX), then POLISH (color, spacing, shadows). In Claude Design, prefer **direct canvas edits** for small tweaks over re-prompting.
-6. Export approved HTML + screenshots to `docs/`.
-
-> **[UPGRADE 2026-07 — APPLIED] Claude Design 2.0 promoted to co-equal with Stitch** (Roger approved 2026-07-02; reverses the June `WORKFLOW_UPGRADES.md` GAP 3 "do NOT adopt Claude Design"). Rationale: 2.0's canvas editing / design-system import / ZIP→Claude Code→Metanet handoff fix the exact Stitch flakiness this doc records (`edit_screens` 0%, `generate_variants` unreliable, `generate_screen_from_text` ~60% + often no output, `list_screens` broken) and remove the old "forces Vercel" objection. Bolt / Vercel-as-pipeline / Figma remain **not adopted**. Ledger: GAP 10.
-
-### Claude Design rules (when using Claude Design 2.0)  [UPGRADE 2026-07-07]
-> From `dVu9A5n2Osw` (Tristen O'Brien) + `m-f56P_L660` (Zubair) + prior `wG4UN0gpB6E`/`Ot582`, watched 2026-07-07. Ledger: GAP 12.
-- **Save a reusable "Design System" (colors, fonts, logo) FIRST — mandatory before generating ANY asset.** It is the single biggest lever that makes every screen come out on-brand instead of AI-looking. Claude can auto-generate one if none exists; import from a GitHub repo / Figma / uploaded assets / a Firecrawl brand-scrape.
-- **Five templates — pick per job:** *Prototype* (clickable page/app), *Slides* (pitch deck → PPTX), *Document* (one-page infographic/flyer → PDF), *Wireframe* (no-color skeleton — **generate this FIRST to lock layout before any build**, avoids expensive rework), *Animation* (small on-brand motion like a logo fade / product slide-in — explicitly **NOT** cinematic; use the Step 0.6b video pipeline for that).
-- **Iterate with canvas edits, not re-prompts** (re-prompting reruns the whole context window and bleeds credits): **Edit** (move elements), **Tweaks** (typed change request), **Annotate** (click-and-comment so Claude fixes that exact spot). Fix one element at a time.
-- **Asset + handoff chain:** Higgsfield MCP (**must be authorized first**) for real images → Claude Design assembly → Share/Send to Canva for manual polish → export **ZIP → Claude Code → build in our repo → Metanet** (never Vercel; the demos stop at localhost — add the deploy step yourself).
-- **Cost note:** updated Claude Design now draws from your **normal plan usage** (not a separate credit pool — the old separate limit is what burned people out). Still a cost lever: default a **cheaper model** for routine template generation and reserve the premium model for hard work. (Per standing rule, this is workflow guidance — do NOT auto-change Roger's configured model.)
-
-### Stitch MCP rules (do not deviate — when using Stitch)
-- Model: **`GEMINI_3_1_PRO`**.
-- `generate_screen_from_text`: ~60% success and **often returns no output even on success** -> ALWAYS verify with `get_project` afterward.
-- `list_screens`: **broken (returns `{}`)** -> use `get_project` (`screenInstances` array: IDs + y-positions; screens display ordered by y-position).
-- `edit_screens`: **0% success — NEVER use.**
-- `generate_variants`: unreliable — **never rely on.**
-- `get_screen`: format `projects/{projectId}/screens/{screenId}` for title, screenshot URL, HTML download URL.
-- Don't dictate exact HTML structure (let Stitch design); DO include all content sections with real copy.
-- Be very explicit per screen type (Stitch can turn a "search page" into another landing page).
-- **Fallback when the API misbehaves: produce paste-ready prompts for the Stitch UI.**
-
-### Anti-slop pre-flight + free auto-enforcing skills  [UPGRADE 2026-07-29]
-> From `1dtJn7OF0Sk` (Claude Design 2.0, DE) + `fUJoUKEWCzY` (Julian Ivanov website tutorial, DE) + `7FU98O0JLHs` (Chase AI). Ledger: GAP 20. Technique — sound (no revenue claims).
-- **Pre-flight sequence (before generating ANY mockup, either tool):** moodboard (Pinterest/Dribbble — pick ONE theme, do not copy refs literally) -> a rough wireframe that defines each section's BEHAVIOUR (what pins on scroll, what swaps, what the CTA does) -> ONE detailed prompt with four parts: **(1) aesthetic/design family, (2) a reference image or URL, (3) intent (product, audience, the single action you want), (4) guardrails (never/always rules = the Anti-slop list below).**
-- **Never one-shot:** generate multiple full-style variants (5 -> pick 1 -> 3 body-layout variants -> pick 1), then nail hero assets in Higgsfield. Treat the first output as ITERATION 1; always verify in a **live preview tab** (the in-editor canvas can render differently from the shipped page).
-- **Two free auto-enforcing skills — INSTALLED in `project-starter/.claude/skills/` on 2026-07-29** (copied into every new project): `design-taste-frontend` (from `leonxlnx/taste-skill` — concrete hierarchy/spacing/typography/motion + final-visual-review rules) and `web-design-guidelines` (from `vercel-labs/agent-skills` — audits UI code against 100+ accessibility/perf/UX rules; run `/web-design-guidelines`, then "PR the site and fix all found issues"). Reinstall in a fresh clone via `npx skills add <github-url> --skill <name>`. Alternates evaluated but not installed: Impeccable (impeccable.style), 21st.dev component refs.
-
----
+**What FAILED (do not repeat):** Stitch (no image input in its MCP; text-prompt drift), Pencil.dev (adopted on research, never exercised), Claude Design chat as generator (weekly plan-limit coupled), pattern-extraction → text brief (the drift boundary), utilitarian references for high-end targets, skipping the craft pass.
 
 ## Step 0.4 — EXTRACT (tokens + system docs)
 
