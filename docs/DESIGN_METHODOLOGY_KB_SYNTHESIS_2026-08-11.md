@@ -54,7 +54,7 @@ Lint gates (KB-derived): ≤~4.4 links/page; attention ratio ~1:1; one exclusive
 - **Components:** 21st.dev Magic MCP (installed, Free 100 cr/mo, [[tool_magic_mcp_21st_dev]]) + shadcn MCP.
 - **Mockup:** Stitch (explore) / Claude Design (polish, dedicated browser) / Pencil.dev (IDE-native, repo JSON, Claude-Code MCP) — pick per route.
 - **Framer + Unframer (NEW, need fit-check):** Framer = candidate for Route B/C (no-code animated/editorial builder); Unframer MCP = Framer→code bridge. Evaluate where they beat Stitch/Claude-Design for animated routes; do NOT assume adoption.
-- **Assets:** Higgsfield (stills Nano Banana/GPT Image 2; motion Seedance 2.0), Recraft (logos/vector).
+- **Assets:** Higgsfield (stills Nano Banana/GPT Image 2; motion Seedance 2.0; **logos = reference-style transfer via Flux Kontext + Nano Banana 2, R-LOGO-01**). Recraft **RETIRED for logos** 2026-08-18 (vectorizer/bg-removal utilities OK).
 - **Motion:** Framer Motion / GSAP (GPU transforms).
 - **QA:** web-design-guidelines, design-taste-frontend, Lighthouse, axe.
 

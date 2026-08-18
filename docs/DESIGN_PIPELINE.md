@@ -5,7 +5,7 @@
 > (predivo `REDESIGN-HANDOFF.md`, any `ONE_PERSON_AI_BUSINESS_WORKFLOW.md` "Step 0", project
 > `.claude/commands/design-*`, etc.) disagrees with this file, **this file wins** and the other is stale.
 > **PROCESS > TOOLS (see §0). Route-first (§0.0). Tools = STITCH, CLAUDE DESIGN 2.0, or PENCIL.DEV — co-equal, pick per ROUTE (§0.0d + Step 0.3).** The OLD standalone Pencil `.pen` tool (used Feb-Apr 2026) is superseded; but **Pencil.dev RELAUNCHED Jan-2026** (IDE-native VS Code/Cursor, Claude-Code MCP, repo-JSON `.pen`) is RE-ADOPTED as a co-equal mockup option (Roger 2026-08-11). Figma / Bolt / Vercel-as-pipeline remain not-adopted.
-> Last updated: 2026-08-15 (Mobbin MCP promoted from "future / needs-auth" to **LIVE + VERIFIED** default reference-research executor — updated §0.0d table + §0.1; verified this session via `search_flows`/`search_screens` returning real salon-booking references; Roger directive: the real-reference pull must be a documented step when creating any UI). Prior: 2026-08-11 (§0 added: process-thesis + ROUTE SELECTION + automation-as-artifacts + enforcement LOOP + tool executor table, from `DESIGN_METHODOLOGY_KB_SYNTHESIS_2026-08-11.md`; Pencil.dev re-adopted; approved by Roger). Prior: 2026-07-14 (Mobbin added as a curated reference source in Step 0.1 + a sourcing note in Step 0.6b — inspiration input, NOT a new stage or a Stitch/Claude-Design replacement; approved by Roger). Prior: 2026-07-02 (Claude Design 2.0 promoted to a co-equal path with Stitch, approved by Roger — reverses the June "Stitch-only / do NOT adopt Claude Design" stance). Prior: 2026-06-18.
+> Last updated: 2026-08-18 (**§0.2 LOGO reworked: Recraft RETIRED for logos → Higgsfield reference-style transfer (Flux Kontext + Nano Banana 2)**, framed as the general EXAMPLE-DRIVEN "style-from-refs + subject-brief" factory method — pick a rendering-style group from the logo reference library + write a subject brief; mechanics + subject-control OPEN fix documented; executor table + pipeline diagram updated; proven route = R-LOGO-01. Roger sign-off via task dispatch; evidence = tool test 2026-08-17/18. Prior: 2026-08-15 Mobbin MCP promoted from "future / needs-auth" to **LIVE + VERIFIED** default reference-research executor — updated §0.0d table + §0.1; verified this session via `search_flows`/`search_screens` returning real salon-booking references; Roger directive: the real-reference pull must be a documented step when creating any UI). Prior: 2026-08-11 (§0 added: process-thesis + ROUTE SELECTION + automation-as-artifacts + enforcement LOOP + tool executor table, from `DESIGN_METHODOLOGY_KB_SYNTHESIS_2026-08-11.md`; Pencil.dev re-adopted; approved by Roger). Prior: 2026-07-14 (Mobbin added as a curated reference source in Step 0.1 + a sourcing note in Step 0.6b — inspiration input, NOT a new stage or a Stitch/Claude-Design replacement; approved by Roger). Prior: 2026-07-02 (Claude Design 2.0 promoted to a co-equal path with Stitch, approved by Roger — reverses the June "Stitch-only / do NOT adopt Claude Design" stance). Prior: 2026-06-18.
 
 ---
 
@@ -50,7 +50,8 @@ Calibrating rule of thumb: set `hero.selector` to the real hero landmark (not `<
 | Components | 21st.dev MCP + shadcn MCP | **21st.dev migrated to HTTP `21st.dev/api/mcp` 2026-08-11, needs `/mcp` auth next session**; shadcn TBD |
 | Mockup | Stitch (explore) · Claude Design (polish, dedicated browser) · Pencil.dev (IDE-native, repo JSON) | pick per route |
 | Editorial/animated builder | Framer + Unframer MCP (Framer→code) | NEW — fit-check before adoption |
-| Assets (stills) | Higgsfield image menu — surface the FULL set (`skills/higgsfield/image-models.md`), do not default to one: **Soul 2.0** (FREE, 5,000 gens, 2K, Soul ID character consistency — the cost-first pick) · **Seedream 5.0 Lite / 4.5** (up to 4K, unlimited batch — high-res) · **Nano Banana 2/Pro** (character/reference + text rendering) · **GPT Image 2** (design/text edit + refinement) · **Recraft** (logo/vector). | in use |
+| Assets (stills) | Higgsfield image menu — surface the FULL set (`skills/higgsfield/image-models.md`), do not default to one: **Soul 2.0** (FREE, 5,000 gens, 2K, Soul ID character consistency — the cost-first pick) · **Seedream 5.0 Lite / 4.5** (up to 4K, unlimited batch — high-res) · **Nano Banana 2/Pro** (character/reference + text rendering) · **GPT Image 2** (design/text edit + refinement) · **Recraft** — RETIRED for logos (missed the style, ~50x cost); vectorizer/bg-removal utilities OK. | in use |
+| **Logos** | **Higgsfield reference-style transfer — Flux Kontext + Nano Banana 2** (style-from-refs + subject-brief, §0.2 + R-LOGO-01). **Recraft RETIRED** for logo generation. | in use (2026-08-18) |
 | Assets (motion) | Higgsfield **Seedance 2.0** | in use |
 | Motion | Framer Motion / GSAP (GPU transforms) | in stack |
 | QA | web-design-guidelines · design-taste-frontend · Lighthouse · axe | installed |
@@ -77,7 +78,7 @@ Calibrating rule of thumb: set `hero.selector` to the real hero landmark (not `<
 
 ```
 0.1 DEFINE      -> docs/DESIGN_BRIEF.md (references + brief + scope + anti-slop rules)
-0.2 LOGO        -> logo + favicon (Recraft)
+0.2 LOGO        -> logo + favicon (Higgsfield ref-style transfer; Recraft RETIRED for logos)
 0.3 MOCKUP      -> STITCH or CLAUDE DESIGN 2.0 design-language discovery, iterate landing page to APPROVAL
 0.4 EXTRACT     -> docs/design-tokens.json + DESIGN_SYSTEM.md + .claude/skills/brand-guidelines/SKILL.md
 0.5 BRAND BOOK  -> standalone HTML brand book
@@ -125,7 +126,29 @@ Timing rule: **do the reference research at the DEFINE step, not before it is re
 
 ## Step 0.2 — LOGO
 
-**Tool: Recraft.** Generate the product logo + favicon: primary lockup (mark + wordmark), mark-only, favicon (16/32/180), monochrome variants. Store as reusable assets referenced by later steps. (Stitch does not make logos; Claude Design does not make logos.)
+**Tool: Higgsfield reference-style transfer (Flux Kontext + Nano Banana 2). Recraft is RETIRED for logos** (2026-08-17/18 tool test: Recraft MISSED Roger's soft-organic style AND cost ~50x — 325 cr vs ~6 cr; Higgsfield hit the style. Proven route = [[reference_proven_routes_registry_2026_08_11]] **R-LOGO-01**; evidence = [[session_logo_tool_capability_test_2026_08_17]]). Generate the product logo + favicon: primary lockup (mark + wordmark), mark-only, favicon (16/32/180), monochrome variants. Store as reusable assets referenced by later steps. (Stitch does not make logos; Claude Design does not make logos.)
+
+### The method — EXAMPLE-DRIVEN generation ("style-from-refs + subject-brief")
+
+This is the **general factory method** for any generative step: **pick a curated STYLE (learned from reference examples) + write a SUBJECT brief → reference-condition the model.** Logos are the FIRST instance; the same shape generalizes to UI, ad creative, images, and video (a design system from examples — the same thing we do for UI). **Load-bearing principle (proven from our own outputs): references transfer STYLE + COMPOSITION, never SUBJECT.** Role split: **AI = style executor; human owns taste (which style) + intent (the subject).** A reference set alone is never a full brief.
+
+**Steps:**
+1. **Pick the rendering-STYLE group** whose drawing approach fits the brand, from the logo reference library `C:\Business\Knowledge Base\logo-reference-library\` (INDEX.md = rules + statuses; groups are S1–S13, defined by *how a mark is drawn*, NOT by shape-motif or subject). E.g. S1-soft-organic-mono-solid (Roger's validated soft-organic family), S2-flat-geometric-facet, etc.
+2. **Write the SUBJECT** in one line — what the mark depicts (e.g. "a rising signal bar"). This is the human's intent; it does NOT come from the refs.
+3. **Prompt = style descriptor (from the group) + subject.** Feed the group's 3–5 reference marks to Higgsfield. Refs carry the look; the prompt carries the subject.
+
+**Higgsfield mechanics (the exact route that worked — R-LOGO-01):**
+- `media_upload` → returns a **presigned PUT** URL; do the PUT via a **curl SCRIPT FILE**, never inline — signed URLs contain characters that break inline single-quoting in bash.
+- `media_confirm` with `type: image` to register each uploaded ref.
+- `generate_image` with `medias[].role`:
+  - **Flux Kontext:** role = `image_references`, **CAP 4 refs** (422 error over 4).
+  - **Nano Banana 2:** role = `image` (resolves to nano_banana_flash).
+- **`get_cost: true` = FREE preflight** — it submits no job and is NOT a spend; always price a run this way first.
+- **Refs must be raster PNG** — SVG uploads are rejected. Rasterize library SVGs first (resvg / `@resvg/resvg-js`).
+
+**Subject-control caveat (OPEN fix — do not skip):** in the 2026-08-18 one-shot validation the model cloned the DOMINANT reference's composition/subject (Duolingo owl, Flickr dots) instead of drawing the prompted subject — i.e. **an iconic ref hijacks composition.** Open fix to apply/test: use **compositionally diverse refs** (no single iconic mark dominating) + a **subject-first prompt** — *"draw a NEW mark of X; do not copy the reference shapes."* Style transfer is proven; subject control is the residual work.
+
+> Optional: vectorize the chosen raster mark (e.g. Recraft `vectorize_image`, or resvg-traced) and build the lockup/favicon variants from it. Recraft's *vectorizer/bg-removal* utilities remain fine; only Recraft-as-the-logo-GENERATOR is retired.
 
 > **[UPGRADE 2026-07-29] Optional sub-step: BRAND CHARACTER (mascot / animated figure)** — approved by Roger 2026-07-29 after the trysoro.com teardown (their 3D-clay mascot INTERACTING with product-UI mockups is the adopt-worthy pattern; reinforces the anti-slop "keep a handmade signature" rule / Isenberg lesson). Ledger: GAP 25. **Per-product FIT check first** (validate-tactic-fit rule): personality-led consumer/SMB products = good fit; trust-led B2B (e.g. Swiss finance) = restraint.
 > 1. **Character stills:** Higgsfield **Nano Banana 2/Pro** (skill-documented fit: character/reference-image work) for 3D-clay/plush style, OR **Recraft custom style** for flat/vector. Roger picks ONE winner → that image is the **locked canonical reference — NEVER regenerate** (same law as logos). Credit rules apply (ask-model + confirm exact run before ANY generation round).
