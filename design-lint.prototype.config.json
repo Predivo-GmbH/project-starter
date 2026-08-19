@@ -1,0 +1,17 @@
+{
+  "_comment": "design-lint preset for a CLIENT PROTOTYPE (G-PROTO). design-lint.mjs encodes landing-page heuristics; a hash/param-routed multi-screen prototype legitimately violates them (many h1s across screens, full app nav, no marketing hero, no above-fold CTA). Skip those, keep the ones that still mean something. Deep prototype checks live in prototype-qc.mjs, not here.",
+  "route": "C",
+  "scroll": true,
+  "skipGates": [
+    "link-count",
+    "hero-attention-ratio",
+    "hero-height",
+    "cta-above-fold",
+    "h1-single",
+    "mobile-h1-fold",
+    "mobile-cta-fold",
+    "perf-weight",
+    "perf-js"
+  ],
+  "thresholds": { "maxFontSizes": 10 }
+}
