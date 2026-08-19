@@ -175,7 +175,7 @@ This is the **general factory method** for any generative step: **pick a curated
 1. **REFERENCE PICK (human).** AI proposes 3 candidate reference products at the right craft level (Mobbin pulls + one-line rationale + anti-pattern call-out). The human picks — this is the decisive taste call; the reference's craft is the ceiling.
 2. **COVERAGE + COMPOSITION (Mobbin MCP, 0 cr).** Pull per-screen reference images for EVERY screen incl. states (login, dashboard, empty/error/onboarding/paywall). Output: screen map — each screen bound to 1–2 reference images.
 3. **TOKENS (Firecrawl, ~1–2 cr).** `/v2/scrape` `formats:["branding"]` on the reference's live site → `design-tokens.json` (real hex/type/radius/spacing) + deliberate identity deltas. Never eyeball values from rasters.
-4. **BUILD (agent, code-native).** Per screen: reference image (composition) + tokens (values) + brief (content/IA) → plain HTML/CSS. Code IS the mockup; the deliverable is openable HTML.
+4. **BUILD (agent, code-native).** Per screen: reference image (composition) + tokens (values) + brief (content/IA) → plain HTML/CSS. Code IS the mockup; the deliverable is openable HTML. **Build the prototype SINGLE-PAGE (hash-routed screens, one index.html)** — the portal prototype gate (R-PROTO-01) serves it via iframe srcDoc; multi-page navigation breaks against the edge gateway's text/html rewrite.
 5. **SIGNATURE (mandatory).** Add ONE owned distinctive element per product — otherwise the result is an anonymous clone.
 6. **QA + AUDIT.** Visual diff per screen vs its reference + design-lint loop until pass. Optional: publish into Claude Design via its MCP (`write_files`, not generation) for Roger's pin-comment review loop (list_comments → revise → ack_comments).
 
