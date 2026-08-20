@@ -126,15 +126,20 @@ if (J.tierB?.B2) {
 
 // B4 duplication (the runner scored the off-token half; the reviewer adds the duplication half).
 // minus 3 per duplicated-block class, deducted from whatever the runner already awarded.
+// Idempotent: re-merging an already-merged report must NOT double-deduct — the runner's original
+// score is preserved in machinePoints on first merge and used as the base from then on.
 if (J.tierB?.B4) {
   const dup = Number(J.tierB.B4.duplicatedBlockClasses || 0);
   const prior = R.tierB.checks.B4 || { points: 15, max: 15, detail: '' };
-  const before = prior.points ?? 15;
+  const machine = prior.machinePoints ?? prior.points ?? 15;
+  const machineDetail = prior.machineDetail ?? prior.detail ?? '';
   R.tierB.checks.B4 = {
     ...prior,
-    points: clamp(before - 3 * dup), max: 15,
-    detail: dup ? `${prior.detail}; ${dup} duplicated-block class(es)` : prior.detail,
+    points: clamp(machine - 3 * dup), max: 15,
+    detail: dup ? `${machineDetail}; ${dup} duplicated-block class(es)` : machineDetail,
     duplicatedBlockClasses: dup,
+    machinePoints: machine,
+    machineDetail,
   };
   merged.push(`B4: ${R.tierB.checks.B4.points}/15 (${dup} duplicated-block class(es))`);
 }

@@ -354,14 +354,34 @@ if (gated) {
   const gctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const gpage = await gctx.newPage();
   const hosts = new Set();
-  gpage.on('request', (r) => { try { hosts.add(new URL(r.url()).host); } catch { /* data:/blob: */ } });
+  const iframeHosts = new Set();
+  // Track which frame each request came from. Through the portal the prototype lives in an iframe
+  // (srcDoc) and the PORTAL CHROME makes its own requests (e.g. Google Fonts) — those are the
+  // gate's, not the prototype's. A1 must only judge the prototype frame's requests.
+  gpage.on('request', (r) => {
+    try {
+      const h = new URL(r.url()).host;
+      hosts.add(h);
+      if (r.frame() && r.frame() !== gpage.mainFrame()) iframeHosts.add(h);
+    } catch { /* data:/blob: */ }
+  });
+  // Weight fallback: the srcDoc iframe's resources are cross-origin (supabase.co) and report
+  // transferSize 0 without a Timing-Allow-Origin header. Sum decoded body sizes of exactly what
+  // the iframe loaded instead — conservative (decoded > wire) and honest.
+  let iframeBytes = 0;
+  gpage.on('response', (r) => {
+    try {
+      if (r.frame() && r.frame() !== gpage.mainFrame()) {
+        r.body().then((b) => { iframeBytes += b.length; }).catch(() => { /* body gone */ });
+      }
+    } catch { /* no frame */ }
+  });
   const gErrors = [];
   gpage.on('pageerror', (e) => gErrors.push(String(e.message || e).slice(0, 200)));
 
   const gresp = await gpage.goto(gated, { waitUntil: 'networkidle', timeout: 90000 });
   await gpage.waitForTimeout(2500);
   const gateHost = new URL(gated).host;
-  const foreign = [...hosts].filter(h => h !== gateHost && !h.endsWith('supabase.co'));
 
   // The prototype renders inside an iframe (srcDoc). Confirm it actually painted.
   const painted = await gpage.evaluate(() => {
@@ -371,6 +391,9 @@ if (gated) {
     catch { return { iframe: true, chars: -1, note: 'cross-origin, cannot read - treat as manual' }; }
   });
 
+  const protoHosts = painted.iframe ? iframeHosts : hosts;
+  const foreign = [...protoHosts].filter(h => h !== gateHost && !h.endsWith('supabase.co'));
+
   const a1 = [];
   if (!gresp || !gresp.ok()) a1.push(`gated URL returned HTTP ${gresp ? gresp.status() : 'nothing'}`);
   if (foreign.length) a1.push(`external host(s) requested: ${foreign.join(', ')}`);
@@ -379,7 +402,19 @@ if (gated) {
   A('A1', a1.length ? 'fail' : 'pass', a1.length ? `${a1.length} gate problem(s)` : `renders through the gate, no external hosts`, { problems: a1, hosts: [...hosts], painted });
 
   if (!skip.has('B7')) {
-    const perf = await gpage.evaluate(() => new Promise((res) => {
+    // Measure the PROTOTYPE's weight, not the portal chrome's: inside an iframe (srcDoc) the
+    // iframe document has its own performance timeline. Same-origin srcDoc is readable; a
+    // cross-origin frame falls back to the main frame with a note.
+    let frame = gpage;
+    let measured = 'main frame (no iframe - prototype IS the page)';
+    if (painted.iframe) {
+      const child = gpage.frames().find((f) => f !== gpage.mainFrame());
+      if (child) {
+        try { await child.evaluate(() => 1); frame = child; measured = 'prototype iframe'; }
+        catch { measured = 'main frame (iframe cross-origin - MANUAL CHECK)'; }
+      }
+    }
+    const perf = await frame.evaluate(() => new Promise((res) => {
       let lcp = 0;
       try { new PerformanceObserver((l) => { for (const e of l.getEntries()) lcp = Math.max(lcp, e.renderTime || e.loadTime || e.startTime || 0); }).observe({ type: 'largest-contentful-paint', buffered: true }); } catch { /* no CWV */ }
       let totalKb = 0, largest = { name: null, kb: 0 };
@@ -391,10 +426,15 @@ if (gated) {
       if (nav) totalKb += (nav.transferSize || 0) / 1024;
       setTimeout(() => res({ lcp: Math.round(lcp), totalKb: Math.round(totalKb), largest }), 800);
     }));
+    perf.measured = measured;
+    if (perf.totalKb === 0 && painted.iframe && iframeBytes > 0) {
+      perf.totalKb = Math.round(iframeBytes / 1024);
+      perf.weightNote = 'decoded bytes summed over iframe responses (cross-origin transferSize is 0 without Timing-Allow-Origin)';
+    }
     let pts = 5;
     if (perf.lcp > T.maxLcpMs) pts -= 3;
     if (perf.totalKb > T.maxTransferKb) pts -= 2;
-    B('B7', Math.max(0, pts), 5, `LCP ${perf.lcp}ms (budget ${T.maxLcpMs}), ${perf.totalKb}KB transferred (budget ${T.maxTransferKb}), largest asset ${perf.largest.name || 'n/a'} ${perf.largest.kb}KB`, { perf });
+    B('B7', Math.max(0, pts), 5, `LCP ${perf.lcp}ms (budget ${T.maxLcpMs}), ${perf.totalKb}KB transferred (budget ${T.maxTransferKb}), largest asset ${perf.largest.name || 'n/a'} ${perf.largest.kb}KB [${measured}${perf.weightNote ? '; ' + perf.weightNote : ''}]`, { perf });
   } else B('B7', 5, 5, 'skipped');
   await gctx.close();
 } else {

@@ -41,14 +41,14 @@ KB-derived lint: ≤~4.4 links/page; attention ratio ~1:1; one exclusive accent 
 ```
 Calibrating rule of thumb: set `hero.selector` to the real hero landmark (not `<header>`); localise `cta.regex` (predivo/SignalScore use German: `loslegen|starten|jetzt|kostenlos|preise|ansehen|…`); raise `maxLinks` for content-rich marketing pages (a full nav+pricing+footer legitimately exceeds 12 — the KB "≤4.4 links" figure is the *hero* attention-ratio, checked separately, not the whole document); raise `maxHeroVh` for an intentionally tall/cinematic hero (predivo 151vh → 160; SignalScore 106vh → 110). A wrong hero selector prints a `⚠ hero selector matched nothing` warning. Calibrated + validated on predivo.ch and signalscore.ch with zero false-positives (2026-08-11).
 
-**WIRED INTO THE BUILD (gating loop).** `package.json` → `"design-lint": "node scripts/design-lint.mjs"`. The deploy workflows (`deploy.yml` prod + `deploy-staging.yml`) run a **Design-lint gate** step after `npm run build`: boot `vite preview` on :3000, wait for it, run the lint — a non-zero exit BLOCKS the deploy (staging-first; design changes reviewed on staging before prod).
+**WIRED INTO THE BUILD (gating loop).** `package.json` → `"design-lint": "node scripts/design-lint.mjs"`. The deploy workflows (`deploy.yml` prod + `deploy-staging.yml`) run a **Design-lint gate** step after `npm run build`: boot `vite preview` on :3000, wait for it, run the lint — a non-zero exit BLOCKS the deploy (staging-first; design changes reviewed on staging before prod). **Prototype branch adds (2026-08-20, Roger: document-only, same convention as design-lint — project-starter has NO package.json by design):** `"prototype-qc": "node scripts/prototype-qc.mjs"` in the per-project `package.json` scripts at scaffold, with devDeps `playwright` + `@axe-core/playwright` (same stack as design-lint, nothing new). The runner + `prototype-qc-merge.mjs` + the agent-pass runbook live in `project-starter/scripts/` and are copied per-project like `design-lint.mjs`.
 
 ### 0.0d TOOL / MCP EXECUTOR TABLE (tools serve the methodology; pick per route)
 | Stage | Executor(s) | Status |
 |---|---|---|
 | Reference research | Mobbin (premium, dedicated Chrome) + Firecrawl scrape | Mobbin browser works now; **MCP LIVE + VERIFIED 2026-08-15 (`api.mobbin.com/mcp`) — `search_flows`/`search_screens`/`search_sections` return real shipped refs. This is the DEFAULT reference-research executor: pull real refs FIRST, then DEFINE (§0.1a).** |
 | Components | 21st.dev MCP + shadcn MCP | **21st.dev migrated to HTTP `21st.dev/api/mcp` 2026-08-11, needs `/mcp` auth next session**; shadcn TBD |
-| UI build (was "Mockup") | RECONSTRUCTION: Mobbin MCP (composition/coverage) + Firecrawl branding scrape (real tokens) + agent code build — NO generative mockup tool (R-DESIGN-03) | ✅ PROVEN 2026-08-18 (Hair Dresser v3) |
+| UI build (was "Mockup") | RECONSTRUCTION: Mobbin MCP (composition/coverage) + Firecrawl branding scrape (real tokens) + agent code build — NO generative mockup tool (R-DESIGN-03). Mobile = dual-form-factor pull (web + ios) and dual-width build/review — mandatory, never a follow-up pass. | ✅ PROVEN 2026-08-18 (Hair Dresser v3) |
 | Review surface (optional) | Claude Design via MCP (write_files, pin-comment loop) — AUDIT function only, never generator | consent granted 2026-08-18 |
 | Editorial/animated builder | Framer + Unframer MCP (Framer→code) | NEW — fit-check before adoption |
 | Assets (stills) | Higgsfield image menu — surface the FULL set (`skills/higgsfield/image-models.md`), do not default to one: **Soul 2.0** (FREE, 5,000 gens, 2K, Soul ID character consistency — the cost-first pick) · **Seedream 5.0 Lite / 4.5** (up to 4K, unlimited batch — high-res) · **Nano Banana 2/Pro** (character/reference + text rendering) · **GPT Image 2** (design/text edit + refinement) · **Recraft** — RETIRED for logos (missed the style, ~50x cost); vectorizer/bg-removal utilities OK. | in use |
@@ -178,6 +178,8 @@ This is the **general factory method** for any generative step: **pick a curated
 4. **BUILD (agent, code-native).** Per screen: reference image (composition) + tokens (values) + brief (content/IA) → plain HTML/CSS. Code IS the mockup; the deliverable is openable HTML. **Build the prototype SINGLE-PAGE (hash-routed screens, one index.html)** — the portal prototype gate (R-PROTO-01) serves it via iframe srcDoc; multi-page navigation breaks against the edge gateway's text/html rewrite.
 5. **SIGNATURE (mandatory).** Add ONE owned distinctive element per product — otherwise the result is an anonymous clone.
 6. **QA + AUDIT.** Visual diff per screen vs its reference + design-lint loop until pass. Optional: publish into Claude Design via its MCP (`write_files`, not generation) for Roger's pin-comment review loop (list_comments → revise → ack_comments).
+7. **MOBILE IS HALF THE DESIGN (mandatory).** The reference pull is dual-form-factor from the start: Mobbin `platform:"web"` (desktop composition) AND `platform:"ios"` (the reference's OWN mobile language — nav pattern, type/spacing scale, sheet patterns). Never improvise responsive behavior.
+8. **Dual build, dual review.** Every screen ships desktop + mobile in the same pass (mobile nav per the iOS reference, tap interactions, sheet modals, ≥40px touch targets). Review captures at BOTH widths (1920 + 390) via CDP device emulation — window-size captures are invalid (desktop Chrome clamps small windows). The token set is INCOMPLETE until it holds desktop + mobile + the responsive contract linking them (see `design-tokens.json` → `responsive`).
 
 **What FAILED (do not repeat):** Stitch (no image input in its MCP; text-prompt drift), Pencil.dev (adopted on research, never exercised), Claude Design chat as generator (weekly plan-limit coupled), pattern-extraction → text brief (the drift boundary), utilitarian references for high-end targets, skipping the craft pass.
 
@@ -217,6 +219,8 @@ Lightweight review of all screens before any code: consistency, content complete
 
 **Missing-state coverage (G11) — MANDATORY checklist.** A single-page lint cannot see these; confirm every one is designed (not just the happy path), because they are where real products feel broken: **empty state** (list/dashboard with no data yet) · **loading/skeleton** · **error state** (failed fetch, 4xx/5xx, offline) · **onboarding / first-run** (no account, first login) · **delete/destructive confirm** · **paywall / quota-reached / trial-expired** (for paid products) · **form validation errors**. Any state without a design is an open QA item — do not pass Step 0.7 until each applicable one exists.
 
+**PROTOTYPE ROUTE — Step 0.7 runs as the G-PROTO profile (2026-08-20).** For the client-facing `prototype` branch, Design QA is codified as **G-PROTO** (`C:/Business/Audits/PROTOTYPE_QC_PROFILE.md`): Tier A hard blocks (gate compatibility, flow completeness, demo-data safety, console clean) + Tier B scored 100 (bar 85) + Tier C human (real-device pass). The runner `scripts/prototype-qc.mjs` fills the mechanical checks and emits `prototype-qc.json`; the **agent pass** (`scripts/prototype-qc-agent-pass.md` + `scripts/prototype-qc-merge.mjs`) fills the judgement slots (B2 state coverage per screen — the G11 list above —, B5 content in the client's market language, B6 palette-vs-brief, confirming the A2/A3 candidates) and merges into the same report. Tier C `acknowledged` flips ONLY after the C1 real-device pass (iOS Safari + Android Chrome). Until then the report verdict is `incomplete` **by design**. Cockpit wiring: the prototype branch's `qa` step is gated `prototype_qc` (migration 025; a `publish-prototype` step precedes it so QC tests the artifact the client opens), and `client-review` re-runs Tier A as gate `client_review_qc` (migration 026, decision D3). The gate rejects prose, `incomplete`/`fail` verdicts, and below-bar scores — the report URL is the only receipt.
+
 ---
 
 ## IMPLEMENT
@@ -240,7 +244,9 @@ Lightweight review of all screens before any code: consistency, content complete
 The human sign-off that ends the design pipeline — the anchor the Cockpit branch steps reference by
 `doc_ref` (the `review` gate on the `design` / `mockup` branches, the `client-review` gate on the
 client-facing `prototype` branch, and `design_approved` inside the `new` branch's design step). It is
-posted via `post_gate('review'|'client-review', 'pass', <receipt>)`:
+posted via `post_gate('review'|'client_review_qc', 'pass', <receipt>)` — since migration 026 the
+prototype's client-review gate key is `client_review_qc` and its receipt is a FRESH prototype-qc.json
+passing the Tier-A re-run (decision D3: catches edits made after QC passed):
 - **Enters on:** the §0.0c enforcement loop passing (design-lint exit 0 + the `design-review` skill's
   multi-viewport pass, Step 0.7) AND the VALIDATE checks above green.
 - **Receipt required:** the approved mockup/screens (link or file) — for the client `prototype`, the
