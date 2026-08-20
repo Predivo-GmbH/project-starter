@@ -10,13 +10,34 @@
  *    plus confirming the runner's CANDIDATE lists (A2 dead controls, A3 emails)
  * and Tier C, which only a human can sign (real device pass, expectation framing).
  *
- * A reviewer (agent or human) walks the prototype following scripts/prototype-qc-review.md, writes
- * a judgements file, and this script merges it in, rescores, and produces the FINAL report. The
+ * A reviewer (agent or human) walks the prototype following scripts/prototype-qc-agent-pass.md,
+ * writes a fill file, and this script merges it in, rescores, and produces the FINAL report. The
  * scoring lives here, in code, so two reviewers cannot score the same findings differently.
  *
  * Usage:
- *   node scripts/prototype-qc-merge.mjs --report=prototype-qc.json --judgements=qc-judgements.json
+ *   node scripts/prototype-qc-merge.mjs --report=prototype-qc.json --fill=prototype-qc.agent.json
  *        [--out=prototype-qc.json] [--json]
+ *   (--judgements= is accepted as an alias for --fill)
+ *
+ * THE FILL FILE SHAPE (written by the reviewer following scripts/prototype-qc-agent-pass.md):
+ *   {
+ *     "reviewer": "who or what did this pass",
+ *     "tierA": {
+ *       "A2": { "deadControlsConfirmed": [] },      // [] = every candidate explained
+ *       "A3": { "emailsConfirmed": [] }             // [] = all demo addresses are fictional
+ *     },
+ *     "tierB": {
+ *       "B2": { "states": { "<screen>": { "empty": "present|missing|n/a", "loading": "...",
+ *                  "error": "...", "first-run": "...", "destructive-confirm": "...",
+ *                  "form-validation": "..." } } },
+ *       "B4": { "duplicatedBlockClasses": 0 },     // -3 each (the runbook's B4 duplication slot)
+ *       "B5": { "languageOk": true, "placeholdersOk": true, "plausible": true, "notes": "" },
+ *       "B6": { "assetsOk": true, "paletteOk": true, "missingAssets": [], "notes": "" }
+ *     },
+ *     "tierC": { "acknowledged": true, "by": "<who>", "notes": ["C1: ...", "C2: ..."] }
+ *   }
+ * A CONFIRMED dead control or a CONFIRMED real email flips Tier A to FAIL. That is the point: the
+ * runner's detectors over-report, the reviewer decides, this script enforces.
  *
  * Exit 0 only when the merged verdict is "pass". That is the file the prototype_qc gate accepts.
  */
@@ -29,14 +50,16 @@ const asJson = args.includes('--json');
 const abs = (p) => (isAbsolute(p) ? p : resolve(process.cwd(), p));
 
 const reportPath = flag('report', 'prototype-qc.json');
-const judgePath = flag('judgements', 'qc-judgements.json');
+// --fill is the spelling used by scripts/prototype-qc-agent-pass.md; --judgements is accepted as an
+// alias so either wording works and neither runbook can silently fail.
+const judgePath = flag('fill', flag('judgements', 'prototype-qc.agent.json'));
 const outPath = flag('out', reportPath);
 
 for (const [label, p] of [['report', reportPath], ['judgements', judgePath]]) {
   if (!existsSync(abs(p))) {
     console.error(`prototype-qc-merge: ${label} not found at ${p}`);
-    console.error('  the report comes from prototype-qc.mjs; the judgements file is written by the');
-    console.error('  reviewer following scripts/prototype-qc-review.md');
+    console.error('  the report comes from prototype-qc.mjs; the fill file is written by the');
+    console.error('  reviewer following scripts/prototype-qc-agent-pass.md');
     process.exit(2);
   }
 }
@@ -99,6 +122,21 @@ if (J.tierB?.B2) {
     missing, states,
   };
   merged.push(`B2: ${R.tierB.checks.B2.points}/20`);
+}
+
+// B4 duplication (the runner scored the off-token half; the reviewer adds the duplication half).
+// minus 3 per duplicated-block class, deducted from whatever the runner already awarded.
+if (J.tierB?.B4) {
+  const dup = Number(J.tierB.B4.duplicatedBlockClasses || 0);
+  const prior = R.tierB.checks.B4 || { points: 15, max: 15, detail: '' };
+  const before = prior.points ?? 15;
+  R.tierB.checks.B4 = {
+    ...prior,
+    points: clamp(before - 3 * dup), max: 15,
+    detail: dup ? `${prior.detail}; ${dup} duplicated-block class(es)` : prior.detail,
+    duplicatedBlockClasses: dup,
+  };
+  merged.push(`B4: ${R.tierB.checks.B4.points}/15 (${dup} duplicated-block class(es))`);
 }
 
 // B5 content (15): minus 5 language mismatch, minus 5 placeholders, minus 5 implausible data.
