@@ -92,71 +92,7 @@ VALIDATE        -> Puppeteer/screenshot checks vs the approved mockup
 ---
 
 ## Step 0.1 — DEFINE
-
-### 0.1-RUN - THE ORDER THIS STEP IS ACTUALLY RUN IN [ADDED 2026-08-27, earned on predivo-website-prototype]
-
-**Read this before 0.1-PRE.** Everything below 0.1-RUN describes WHAT the brief must contain. This
-describes HOW it is obtained, and it did not exist until 2026-08-27. Its absence cost three deleted
-projects and an entire session: without a written order, the agent reconstructed one badly, in front
-of Roger, and filled two fields in by itself along the way.
-
-**Q1. ASK FIRST: is there a requirements document this brief has to derive from?**
-- **YES ->** get its location, read it, name it in the brief with the date read, and run 0.1-PRE:
-  copy its exclusions in VERBATIM with the line they came from, and confirm every requirement ID.
-- **NO ->** the brief is the first document. Say so in the brief, in the human's words, and go to Q2.
-- **NEVER answer this question yourself.** "Greenfield" means do not carry old work over. It does
-  NOT mean "declare that no requirements document exists". Those are different claims and only the
-  human can make the second one.
-
-**Q2. If there is no parent, ask these ONE AT A TIME, in this order.** Every one via
-AskUserQuestion with clickable options and a recommendation (Rule 18). Never batched. Never as plain
-text A/B/C. The order matters: each answer narrows the next.
-
-1. **Whose is it, and what is it called?**
-2. **What are we building?** (marketing site / product interface / single page / brand piece)
-3. **When it works, what has the visitor done?** (made contact / signed up / bought / just understood)
-4. **Who is it for?**
-5. **What is the claim it rests on, in one line?**
-6. **How should it feel?** (this is what later decides which references get pulled)
-7. **Light, dark, or both?**
-8. **What kind of logo?** (wordmark / drawn mark / defer) - Step 0.2 refuses to run without this.
-9. **How many screens?**
-
-**Q3. SHOW THE SUMMARY** as a table, one line per answer, in the chat. Not a file path.
-
-**Q4. ASK: "do you want to change anything in the summary?"** If yes, ask WHICH lines (grouped if
-there are more than four), correct them, and **return to Q3**. Loop until the answer is no.
-
-**Q5. ONLY THEN write `docs/DESIGN_BRIEF.md`**, and deliver its full text in the chat.
-
-#### The four rules that make the above work, all of them earned the hard way
-
-1. **No value enters the brief unless the human supplied it.** A value nobody supplied is an
-   assumption however obvious it looks. The company name was once filled in from the project title
-   on the work board; nobody had been asked, and the whole project had to be deleted.
-2. **Never recommend an answer to a question of fact only the human holds.** A recommendation with
-   nothing behind it is an assumption wearing a label. Say plainly that no recommendation is
-   possible and why. A recommendation IS required everywhere it can be grounded, and the grounds go
-   in the option's description so the human can weigh them.
-3. **Reference research does NOT happen here**, whatever section 0.1a below says. On any branch that
-   has its own `reference-pick` step, pulling reference examples belongs to that step. Doing it at
-   DEFINE means either duplicated work or two different answers. (Roger, 2026-08-27. This
-   contradicts 0.1a and the R-DESIGN-02 registry entry, both of which place it at DEFINE. Left
-   visible rather than silently patched, because the contradiction is itself a finding: the board
-   labels DEFINE with R-DESIGN-02, which describes reference pulling, while the section the step
-   points at describes writing a brief.)
-4. **Nothing about a project may be inferred from a project title, a folder name, a repository, or
-   a live site.** Those are where the assumptions come from.
-
-> **The audit verdict this earned, 2026-08-27:** `define` was marked green and proven on the Factory
-> Audit board. Running it honestly, once, produced disagreement about where the name comes from,
-> whether a requirements document is needed, which document describes the step, and what the step
-> even contains. **A step nobody can execute twice the same way was never audited.** The green mark
-> on `define` is not trustworthy and the step needs re-auditing after this section has been used on
-> a second project.
-
----
-
+> ⚠ **HOW this step is run is written down: see `0.1-RUN` at the BOTTOM of this file. Read it FIRST.** It is kept there, not here, because every step on every branch points into this document BY LINE NUMBER, so inserting text anywhere breaks all the pointers below it. That happened on 2026-08-27 and broke eight of the nine.
 ### 0.1-PRE — INHERIT THE PARENT'S SCOPE BEFORE WRITING A WORD OF THE BRIEF [ADDED 2026-08-24, Roger approved]
 
 **This brief is almost always DERIVED. Three things happen before any design thinking:**
@@ -393,3 +329,70 @@ For projects with code but no formal design system:
 - Stitch MCP quirks: playbook memory `reference_stitch_api_quirks.md`.
 - Stitch workflow origin/history: playbook memory `feedback_stitch_for_mockups.md` (2026-03-23).
 - This doc supersedes those for the *process*; they remain as supporting detail only.
+
+
+---
+
+### 0.1-RUN - THE ORDER THIS STEP IS ACTUALLY RUN IN [ADDED 2026-08-27, earned on predivo-website-prototype]
+
+**Read this before 0.1-PRE.** Everything below 0.1-RUN describes WHAT the brief must contain. This
+describes HOW it is obtained, and it did not exist until 2026-08-27. Its absence cost three deleted
+projects and an entire session: without a written order, the agent reconstructed one badly, in front
+of Roger, and filled two fields in by itself along the way.
+
+**Q1. ASK FIRST: is there a requirements document this brief has to derive from?**
+- **YES ->** get its location, read it, name it in the brief with the date read, and run 0.1-PRE:
+  copy its exclusions in VERBATIM with the line they came from, and confirm every requirement ID.
+- **NO ->** the brief is the first document. Say so in the brief, in the human's words, and go to Q2.
+- **NEVER answer this question yourself.** "Greenfield" means do not carry old work over. It does
+  NOT mean "declare that no requirements document exists". Those are different claims and only the
+  human can make the second one.
+
+**Q2. If there is no parent, ask these ONE AT A TIME, in this order.** Every one via
+AskUserQuestion with clickable options and a recommendation (Rule 18). Never batched. Never as plain
+text A/B/C. The order matters: each answer narrows the next.
+
+1. **Whose is it, and what is it called?**
+2. **What are we building?** (marketing site / product interface / single page / brand piece)
+3. **When it works, what has the visitor done?** (made contact / signed up / bought / just understood)
+4. **Who is it for?**
+5. **What is the claim it rests on, in one line?**
+6. **How should it feel?** (this is what later decides which references get pulled)
+7. **Light, dark, or both?**
+8. **What kind of logo?** (wordmark / drawn mark / defer) - Step 0.2 refuses to run without this.
+9. **How many screens?**
+
+**Q3. SHOW THE SUMMARY** as a table, one line per answer, in the chat. Not a file path.
+
+**Q4. ASK: "do you want to change anything in the summary?"** If yes, ask WHICH lines (grouped if
+there are more than four), correct them, and **return to Q3**. Loop until the answer is no.
+
+**Q5. ONLY THEN write `docs/DESIGN_BRIEF.md`**, and deliver its full text in the chat.
+
+#### The four rules that make the above work, all of them earned the hard way
+
+1. **No value enters the brief unless the human supplied it.** A value nobody supplied is an
+   assumption however obvious it looks. The company name was once filled in from the project title
+   on the work board; nobody had been asked, and the whole project had to be deleted.
+2. **Never recommend an answer to a question of fact only the human holds.** A recommendation with
+   nothing behind it is an assumption wearing a label. Say plainly that no recommendation is
+   possible and why. A recommendation IS required everywhere it can be grounded, and the grounds go
+   in the option's description so the human can weigh them.
+3. **Reference research does NOT happen here**, whatever section 0.1a below says. On any branch that
+   has its own `reference-pick` step, pulling reference examples belongs to that step. Doing it at
+   DEFINE means either duplicated work or two different answers. (Roger, 2026-08-27. This
+   contradicts 0.1a and the R-DESIGN-02 registry entry, both of which place it at DEFINE. Left
+   visible rather than silently patched, because the contradiction is itself a finding: the board
+   labels DEFINE with R-DESIGN-02, which describes reference pulling, while the section the step
+   points at describes writing a brief.)
+4. **Nothing about a project may be inferred from a project title, a folder name, a repository, or
+   a live site.** Those are where the assumptions come from.
+
+> **The audit verdict this earned, 2026-08-27:** `define` was marked green and proven on the Factory
+> Audit board. Running it honestly, once, produced disagreement about where the name comes from,
+> whether a requirements document is needed, which document describes the step, and what the step
+> even contains. **A step nobody can execute twice the same way was never audited.** The green mark
+> on `define` is not trustworthy and the step needs re-auditing after this section has been used on
+> a second project.
+
+---
