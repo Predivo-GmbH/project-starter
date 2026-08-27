@@ -352,6 +352,14 @@ of Roger, and filled two fields in by itself along the way.
 AskUserQuestion with clickable options and a recommendation (Rule 18). Never batched. Never as plain
 text A/B/C. The order matters: each answer narrows the next.
 
+0. **WHICH ROUTE?** A clean and minimal, B editorial and brand, or C cinematic and animated. See
+   section 0.0. The method calls this "the ONE up-front human decision, do this FIRST", and it is
+   listed here as question zero because it changes the answer to almost everything below it,
+   including which references get pulled and whether there is any motion or footage at all.
+   ⚠ ADDED 2026-08-27 because the first written version of this questionnaire OMITTED it. The step
+   is literally named "brief + route + references" and the route was still skipped. If a required
+   question can go missing from the list that exists to stop questions going missing, the list is
+   not enough on its own.
 1. **Whose is it, and what is it called?**
 2. **What are we building?** (marketing site / product interface / single page / brand piece)
 3. **When it works, what has the visitor done?** (made contact / signed up / bought / just understood)
