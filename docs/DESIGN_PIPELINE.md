@@ -366,6 +366,11 @@ text A/B/C. The order matters: each answer narrows the next.
 4. **Who is it for?**
 5. **What is the claim it rests on, in one line?**
 6. **How should it feel?** (this is what later decides which references get pulled)
+6b. **IF THE ROUTE IS C: what does the motion actually SHOW?** Not "there is a video", but what the
+   visitor watches happen. Added 2026-08-27 after three reference shortlists were produced without
+   it, all useless. The answer changes what a good reference even is: a film that runs THROUGH the
+   scroll needs a reference that holds content over footage across a long scroll, which is a
+   completely different site from one with a hero clip and ordinary sections below it.
 7. **Light, dark, or both?**
 8. **What kind of logo?** (wordmark / drawn mark / defer) - Step 0.2 refuses to run without this.
 9. **How many screens?**
