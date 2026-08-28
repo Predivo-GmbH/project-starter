@@ -375,6 +375,79 @@ text A/B/C. The order matters: each answer narrows the next.
 8. **What kind of logo?** (wordmark / drawn mark / defer) - Step 0.2 refuses to run without this.
 9. **How many screens?**
 
+**Q2b. PAGE STRUCTURE. Ask this on BOTH routes. [ADDED 2026-08-28]**
+
+The single most important input and it was missing entirely. Roger found it; the reference builds
+both open with it; one of them states it outright: *"how you structure the page, how you want the
+user journey and the flow to be, that is actually the most important part rather than a website that
+just looks good."*
+
+Ask, one at a time:
+1. **What already exists?** Real photographs, real screens, a logo, real numbers. Everything
+   generated later must REFERENCE these so it does not drift into a different object. The reference
+   build started from exactly two real assets and generated the rest from them.
+2. **What sections does the page have, in order?**
+3. **What is each section FOR?** What the visitor should understand or feel by the end of it.
+4. **Where does the primary action sit, and where does it repeat?**
+5. **What is visible before any scrolling at all?**
+
+WHY IT WAS MISSING, and this is the general lesson: the route was proven on a static PRODUCT
+INTERFACE, where the screen list (login, dashboard, empty, error) hands you the structure for free and
+`coverage` simply pulls a picture per screen. A MARKETING PAGE has no such list. Sections are
+invented, not enumerated. So the structure never arrived and nothing noticed, because on the branch it
+was proven on it had never needed asking.
+
+**Q2c. THE WORDS. Ask this on BOTH routes. [ADDED 2026-08-28]**
+
+Per section: the headline, the supporting line, any list items, the label on the button. In every
+language the page ships in.
+
+Missing for the same reason as Q2b. On a product interface the copy is predictable labels that come
+with the domain. **On a marketing page the copy IS the product**, and a prototype filled with
+placeholder text is judged as slop, which defeats the entire purpose of building one.
+
+**Q2d. THE CRAFT REFERENCE. Ask this on BOTH routes. [ADDED 2026-08-28]**
+
+Which real, live site sets the bar. **Still required on the animated route**, and this surprises
+people: the knowledge base gives a METHOD and a handful of pinned values, never a complete type scale.
+Only a measured real page gives you every size, line height, tracking, spacing unit and radius, at
+both widths.
+
+⚠ **Source depends on what kind of page it is.** Mobbin is shipped PRODUCT UI. For a MARKETING page
+the source is Awwwards and documented builds, which our own knowledge base states and which cost a
+session three useless shortlists when it was ignored.
+
+**Q2e. THE FILM. Animated route ONLY, and only answerable once Q2b exists. [ADDED 2026-08-28]**
+
+⚠ **There is usually MORE THAN ONE video.** The reference build had two, in different sections, doing
+different jobs. Ask all of the below PER animated section.
+
+⚠ **THE STILL COMES FIRST.** The video is NOT generated from a concept and dropped into a layout. The
+section is designed with a still already in it, and THAT EXACT STILL becomes the reference image used
+to animate it. Getting this backwards costs hours: you end up trying to design a page around a film
+that does not exist.
+
+1. **Which sections are animated?**
+2. **What is the subject, in one noun?**
+3. **What happens, stage by stage, with SECONDS attached?** The reference prompts are shot lists with
+   a clock: front-on for the first three seconds, then rotate and zoom over three, then a top-down pan
+   for three, then it exits frame. Not a mood.
+4. **What is the camera doing?** ONE unbroken move. A cut kills a scroll-driven interaction.
+5. **What does the final frame look like?** It becomes the end-state pin. Skipping it is what made
+   separate clips drift until a finished house lost its windows.
+6. **What must never appear?** People, text, logos, interface.
+7. **Light, materials, palette, lens.** Concrete. **Never the word "cinematic"**, which returns the
+   model's average of everything.
+8. **Scroll behaviour for this section.** Does it pin. What progresses. What appears, and at which
+   second. When does it release and let the page carry on. This gets dictated in plain English to the
+   builder and works.
+9. **Settings:** duration, aspect ratio, resolution, bitrate, **sound OFF**.
+10. **What else on the page moves?** The craft rule allows one or two motion moments and the film is
+    one of them.
+
+**THE TEST FOR ALL OF THE ABOVE:** take the answers and build the page without asking a single
+follow-up question. If you need to ask one, a question is still missing from this list.
+
 **Q3. SHOW THE SUMMARY** as a table, one line per answer, in the chat. Not a file path.
 
 **Q4. ASK: "do you want to change anything in the summary?"** If yes, ask WHICH lines (grouped if
