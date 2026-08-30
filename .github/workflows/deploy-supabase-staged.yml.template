@@ -125,7 +125,12 @@ jobs:
           sudo apt-get install -y lftp
           echo "{{STAGING_SITE_ID}}" > ./dist/.site-id
           # CANONICAL FTP settings — ssl-protect-data no is load-bearing (§1).
-          CMDS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4; mirror --reverse --delete --no-perms --verbose --exclude .htpasswd --exclude cgi-bin/ ./dist/ {{STAGING_DOMAIN}}/; bye"
+          # Zero-downtime + asset retention (§5a): assets FIRST (no --delete) so new
+          # chunks exist before index.html references them; the root mirror keeps
+          # --delete but EXCLUDES assets/ so old hashed chunks survive for tabs still
+          # running a previous index.html. Superseded chunks are pruned by AGE (14
+          # days) in the step below — never deleted at deploy time.
+          CMDS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4; mirror --reverse --no-perms --verbose ./dist/assets/ {{STAGING_DOMAIN}}/assets/; mirror --reverse --delete --no-perms --verbose --exclude '^assets/' --exclude .htpasswd --exclude cgi-bin/ ./dist/ {{STAGING_DOMAIN}}/; bye"
           n=0
           until [ $n -ge 4 ]; do
             if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
@@ -144,6 +149,98 @@ jobs:
         run: supabase functions deploy $(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_*' -printf '%f ') --project-ref {{STAGING_REF}} --use-api
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Prune stale assets (14-day retention)
+        # Age-based cleanup of the hashed chunks the asset-retention exclusion above
+        # leaves behind (deploy-standard.md §5a). lftp has no find -mtime (only
+        # -max-depth/-ls), so this probes each file's mtime over raw FTP MDTM
+        # (RFC 3659) and deletes files older than 14 days — long after every open
+        # tab has reloaded. Never fails the deploy: it logs ::error:: and the next
+        # deploy retries. Capped at 1000 deletions per run.
+        continue-on-error: true
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.STAGING_FTP_USER }}
+          FTP_PASS: ${{ secrets.STAGING_FTP_PASS }}
+          ASSETS_DIR: "{{STAGING_DOMAIN}}/assets"
+        run: |
+          set -u
+          export TZ=UTC
+          DAYS=14
+          CUTOFF=$(date -u -d "$DAYS days ago" +%Y%m%d%H%M%S)
+          SETTINGS="set ftp:ssl-force yes
+          set ssl:verify-certificate no; set ftp:ssl-protect-data no
+          set ftp:passive-mode yes; set net:timeout 60"
+
+          LIST=$(timeout 180 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" <<SCRIPT 2>&1
+          $SETTINGS
+          find $ASSETS_DIR
+          quit
+          SCRIPT
+          )
+          if [ $? -ne 0 ]; then
+            echo "::error::Asset prune: listing $ASSETS_DIR failed - leaving cleanup to the next deploy. Output: $(echo "$LIST" | head -3)"
+            exit 0
+          fi
+          if [ -z "$(echo "$LIST" | tr -d '[:space:]')" ]; then
+            echo "Asset prune: $ASSETS_DIR is empty - nothing to do."
+            exit 0
+          fi
+
+          # Probe every file's mtime in ONE lftp session: echo a PROBE: name line before
+          # each quote MDTM so reply lines stay paired with their file even when a file
+          # vanishes (550) between listing and probing.
+          PROBE_SCRIPT=$(mktemp)
+          {
+            echo "$SETTINGS"
+            # find prints full remote paths ("$ASSETS_DIR/<nested>/file", recursively);
+            # normalize to a path relative to ASSETS_DIR so either output format is safe.
+            echo "$LIST" | while IFS= read -r p; do
+              p="${p%$'\r'}"
+              [ "$p" = "$ASSETS_DIR" ] && continue
+              rel="${p#"$ASSETS_DIR"/}"
+              # Hashed asset names only ([A-Za-z0-9._/-], no spaces/globs) — anything
+              # else is skipped, never deleted.
+              [[ "$rel" =~ ^[A-Za-z0-9._/-]+$ ]] || continue
+              echo "echo \"PROBE:$ASSETS_DIR/$rel\""
+              echo "quote MDTM $ASSETS_DIR/$rel"
+            done
+            echo "quit"
+          } > "$PROBE_SCRIPT"
+
+          OUT=$(timeout 420 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" -f "$PROBE_SCRIPT" 2>&1)
+          rm -f "$PROBE_SCRIPT"
+
+          # Pair each PROBE: line with the following 213/550 reply; 14-digit UTC
+          # timestamps compare correctly as plain strings against the 14-digit cutoff.
+          PAIRED=$(awk '
+            /^PROBE:/ { file=substr($0, 7); next }
+            file != "" {
+              if ($1 == "213" && $2 ~ /^[0-9]{14}$/) print $2, file
+              file=""
+            }' <<< "$OUT")
+          if [ -z "$PAIRED" ]; then
+            echo "::error::Asset prune: no MDTM replies from $ASSETS_DIR (server may not support RFC 3659 MDTM) - leaving cleanup to the next deploy."
+            exit 0
+          fi
+
+          OLD=$(sort -n <<< "$PAIRED" | awk -v cutoff="$CUTOFF" '$1 < cutoff {print $2}' | head -1000)
+          COUNT=$(echo "$OLD" | grep -c . || true)
+          if [ "$COUNT" -eq 0 ]; then echo "Asset prune: nothing older than $DAYS days in $ASSETS_DIR."; exit 0; fi
+
+          DEL_SCRIPT=$(mktemp)
+          {
+            echo "$SETTINGS"
+            # lftp rm does NOT glob-expand - hashed names are passed verbatim.
+            # $OLD already holds full remote paths (the PROBE: values).
+            echo "$OLD" | while IFS= read -r f; do echo "rm $f"; done
+            echo "quit"
+          } > "$DEL_SCRIPT"
+          DEL_OUT=$(timeout 300 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" -f "$DEL_SCRIPT" 2>&1)
+          rm -f "$DEL_SCRIPT"
+          echo "$DEL_OUT"
+          echo "Asset prune: deleted $COUNT file(s) older than $DAYS days from $ASSETS_DIR."
+          exit 0
 
   e2e-staging:
     needs: deploy-staging
@@ -246,7 +343,8 @@ jobs:
       # --severity=ERROR limits to highest-confidence rules; --error makes a real finding fail the gate.
       - name: SAST scan (semgrep)
         run: |
-          python3 -m pip install --quiet semgrep
+          python3 -m pip install --quiet --user --break-system-packages semgrep
+          export PATH="$HOME/.local/bin:$PATH"
           semgrep scan --config=p/security-audit --config=p/secrets --severity=ERROR --error --metrics=off .
 
   deploy:
@@ -293,7 +391,10 @@ jobs:
             exit 1
           fi
           # Zero-downtime: assets first (no delete), then full mirror with delete.
-          CMDS="$SETTINGS mirror --reverse --no-perms --verbose ./dist/assets/ /httpdocs/assets/; mirror --reverse --delete --no-perms --verbose ./dist/ /httpdocs/; bye"
+          # The full mirror EXCLUDES assets/ (§5a): old hashed chunks must survive for
+          # tabs still running a previous index.html; they are pruned by AGE (14 days)
+          # in the step below — never deleted at deploy time.
+          CMDS="$SETTINGS mirror --reverse --no-perms --verbose ./dist/assets/ /httpdocs/assets/; mirror --reverse --delete --no-perms --verbose --exclude '^assets/' ./dist/ /httpdocs/; bye"
           n=0
           until [ $n -ge 4 ]; do
             if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
@@ -311,3 +412,95 @@ jobs:
         run: supabase functions deploy $(find supabase/functions -mindepth 1 -maxdepth 1 -type d -not -name '_*' -printf '%f ') --project-ref {{PROD_REF}} --use-api
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Prune stale assets (14-day retention)
+        # Age-based cleanup of the hashed chunks the asset-retention exclusion above
+        # leaves behind (deploy-standard.md §5a). lftp has no find -mtime (only
+        # -max-depth/-ls), so this probes each file's mtime over raw FTP MDTM
+        # (RFC 3659) and deletes files older than 14 days — long after every open
+        # tab has reloaded. Never fails the deploy: it logs ::error:: and the next
+        # deploy retries. Capped at 1000 deletions per run.
+        continue-on-error: true
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASS: ${{ secrets.FTP_PASS }}
+          ASSETS_DIR: /httpdocs/assets
+        run: |
+          set -u
+          export TZ=UTC
+          DAYS=14
+          CUTOFF=$(date -u -d "$DAYS days ago" +%Y%m%d%H%M%S)
+          SETTINGS="set ftp:ssl-force yes
+          set ssl:verify-certificate no; set ftp:ssl-protect-data no
+          set ftp:passive-mode yes; set net:timeout 60"
+
+          LIST=$(timeout 180 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" <<SCRIPT 2>&1
+          $SETTINGS
+          find $ASSETS_DIR
+          quit
+          SCRIPT
+          )
+          if [ $? -ne 0 ]; then
+            echo "::error::Asset prune: listing $ASSETS_DIR failed - leaving cleanup to the next deploy. Output: $(echo "$LIST" | head -3)"
+            exit 0
+          fi
+          if [ -z "$(echo "$LIST" | tr -d '[:space:]')" ]; then
+            echo "Asset prune: $ASSETS_DIR is empty - nothing to do."
+            exit 0
+          fi
+
+          # Probe every file's mtime in ONE lftp session: echo a PROBE: name line before
+          # each quote MDTM so reply lines stay paired with their file even when a file
+          # vanishes (550) between listing and probing.
+          PROBE_SCRIPT=$(mktemp)
+          {
+            echo "$SETTINGS"
+            # find prints full remote paths ("$ASSETS_DIR/<nested>/file", recursively);
+            # normalize to a path relative to ASSETS_DIR so either output format is safe.
+            echo "$LIST" | while IFS= read -r p; do
+              p="${p%$'\r'}"
+              [ "$p" = "$ASSETS_DIR" ] && continue
+              rel="${p#"$ASSETS_DIR"/}"
+              # Hashed asset names only ([A-Za-z0-9._/-], no spaces/globs) — anything
+              # else is skipped, never deleted.
+              [[ "$rel" =~ ^[A-Za-z0-9._/-]+$ ]] || continue
+              echo "echo \"PROBE:$ASSETS_DIR/$rel\""
+              echo "quote MDTM $ASSETS_DIR/$rel"
+            done
+            echo "quit"
+          } > "$PROBE_SCRIPT"
+
+          OUT=$(timeout 420 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" -f "$PROBE_SCRIPT" 2>&1)
+          rm -f "$PROBE_SCRIPT"
+
+          # Pair each PROBE: line with the following 213/550 reply; 14-digit UTC
+          # timestamps compare correctly as plain strings against the 14-digit cutoff.
+          PAIRED=$(awk '
+            /^PROBE:/ { file=substr($0, 7); next }
+            file != "" {
+              if ($1 == "213" && $2 ~ /^[0-9]{14}$/) print $2, file
+              file=""
+            }' <<< "$OUT")
+          if [ -z "$PAIRED" ]; then
+            echo "::error::Asset prune: no MDTM replies from $ASSETS_DIR (server may not support RFC 3659 MDTM) - leaving cleanup to the next deploy."
+            exit 0
+          fi
+
+          OLD=$(sort -n <<< "$PAIRED" | awk -v cutoff="$CUTOFF" '$1 < cutoff {print $2}' | head -1000)
+          COUNT=$(echo "$OLD" | grep -c . || true)
+          if [ "$COUNT" -eq 0 ]; then echo "Asset prune: nothing older than $DAYS days in $ASSETS_DIR."; exit 0; fi
+
+          DEL_SCRIPT=$(mktemp)
+          {
+            echo "$SETTINGS"
+            # lftp rm does NOT glob-expand - hashed names are passed verbatim.
+            # $OLD already holds full remote paths (the PROBE: values).
+            echo "$OLD" | while IFS= read -r f; do echo "rm $f"; done
+            echo "quit"
+          } > "$DEL_SCRIPT"
+          DEL_OUT=$(timeout 300 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" -f "$DEL_SCRIPT" 2>&1)
+          rm -f "$DEL_SCRIPT"
+          echo "$DEL_OUT"
+          echo "Asset prune: deleted $COUNT file(s) older than $DAYS days from $ASSETS_DIR."
+          exit 0
