@@ -406,16 +406,12 @@ Missing for the same reason as Q2b. On a product interface the copy is predictab
 with the domain. **On a marketing page the copy IS the product**, and a prototype filled with
 placeholder text is judged as slop, which defeats the entire purpose of building one.
 
-**Q2d. THE CRAFT REFERENCE. Ask this on BOTH routes. [ADDED 2026-08-28]**
+**Q2d. WITHDRAWN 2026-08-30. It was wrong, and it is left visible rather than deleted.**
 
-Which real, live site sets the bar. **Still required on the animated route**, and this surprises
-people: the knowledge base gives a METHOD and a handful of pinned values, never a complete type scale.
-Only a measured real page gives you every size, line height, tracking, spacing unit and radius, at
-both widths.
-
-⚠ **Source depends on what kind of page it is.** Mobbin is shipped PRODUCT UI. For a MARKETING page
-the source is Awwwards and documented builds, which our own knowledge base states and which cost a
-session three useless shortlists when it was ignored.
+Added 2026-08-28 asking which real live site sets the craft bar. That is `reference-pick`'s
+question, and rule 3 below already said so, from a ruling made the day before it was written. The
+numbering is not renumbered: Q2e keeps its name so that everything referring to it stays true.
+The two facts it carried were real and have moved into rule 3, which is where they belong.
 
 **Q2e. THE FILM. Animated route ONLY, and only answerable once Q2b exists. [ADDED 2026-08-28]**
 
@@ -471,6 +467,15 @@ there are more than four), correct them, and **return to Q3**. Loop until the an
    visible rather than silently patched, because the contradiction is itself a finding: the board
    labels DEFINE with R-DESIGN-02, which describes reference pulling, while the section the step
    points at describes writing a brief.)
+
+   **Two things `reference-pick` has to carry, learned on the animated route and previously written
+   into the wrong step.** First, a real measured page is still required when the page is animated,
+   and this surprises people: the knowledge base gives a METHOD and a handful of pinned values,
+   never a complete type scale. Only a measured live page yields every size, line height, tracking,
+   spacing unit and radius at both widths. Second, the source depends on what kind of page it is.
+   **Mobbin is shipped PRODUCT UI.** For a MARKETING page the source is Awwwards and documented
+   builds, which our own knowledge base states and which cost a session three useless shortlists
+   when it was ignored.
 4. **Nothing about a project may be inferred from a project title, a folder name, a repository, or
    a live site.** Those are where the assumptions come from.
 
