@@ -340,6 +340,52 @@ describes HOW it is obtained, and it did not exist until 2026-08-27. Its absence
 projects and an entire session: without a written order, the agent reconstructed one badly, in front
 of Roger, and filled two fields in by itself along the way.
 
+**0.1-SOURCE. THE HUMAN IS THE EDITOR, NOT THE AUTHOR. BUILD THE SOURCE BEFORE YOU ASK ANYTHING.**
+[ADDED 2026-09-01. This is the root cause of every failure this step has produced, and it had already
+been written down on 2026-08-27 as a finding and left unfixed.]
+
+**THE FAULT, stated once.** Everything below asks the human to INVENT: what is the claim, in one
+line; what sections does the page have; what is the subject, in one noun. Sat in an empty room with
+nothing in front of him, the honest human answer to those is generic — "a factory", "show the
+machinery" — and a generic brief renders faithfully into a generic result. **The step silently casts
+the human as the AUTHOR. He is the EDITOR.** He is fast and ruthless correcting a wrong sentence and
+slow and vague producing one from nothing, and this method had him doing the second.
+
+**THE PROOF, from the same company, two months apart.** A process that DERIVED the story produced a
+signed-off content model whose own header reads *"Every claim below is sourced from the real system
+or our own strategy docs — nothing invented"*, citing the codebase, the seeded step data and the
+strategy documents. Its lead claim was found already written in the company's own overview. Its page
+blocks came out of the real branch and step counts. Its film stages were the company's ACTUAL stages.
+The questionnaire, run on the same company on a green field, produced "a factory" and cost 180
+credits to discover it.
+
+**SO, BEFORE Q0 AND BEFORE ANY QUESTION IS PUT TO A HUMAN:**
+
+1. **Find the source and read it.** In order of authority: a parent requirements or brief document if
+   one exists; the company's own strategy and overview documents; **the real system itself** — the
+   codebase, the seeded data, the actual numbers, the actual products, the actual process; then the
+   current site's content. On the `new` branch this arrives free from `brief-offer`. **On `prototype`
+   and `design` NOTHING provides it, which is exactly why it must be built here.**
+2. **Write a DRAFT of the story, with a citation on every line.** The claim, quoted with the file and
+   line it was found in. The sections, each with what it says and where that came from. Every number
+   with its source. **Nothing uncited.** If a line has no source, it is marked `NO SOURCE - INVENTED`
+   in the draft, in those words, so it stands out.
+3. **Put the draft in front of the human and ask him to CORRECT it**, not to approve it. "Here is what
+   your own system says you are. What is wrong?" That is an editing task and he will be fast at it.
+4. **Only then run Q0 and Q2.** Every question below now has something to react to instead of a blank.
+
+**THIS DOES NOT BREAK THE NO-ASSUMPTIONS RULE, and the difference matters because two projects were
+once deleted over it.** The deleted projects had values filled in SILENTLY, from a project title, with
+no source and no flag, and presented as fact. A cited draft, labelled a draft, handed over for
+correction, with every uncited line marked as invented, is the opposite of that: it is research put
+up for rejection. **The sin was never that a draft existed. The sin was that it was silent and
+unsourced.** A human cannot correct what he was never shown.
+
+**AND THE ANSWER "NO, THERE IS NO PARENT DOCUMENT" IS NOT AN EXIT.** Q1 below asks whether a parent
+requirements document exists. On 2026-08-27 that was answered NO, correctly, and the step went
+straight into interrogating the human, which is what produced everything above. A NO means **the
+source has to be BUILT here, by steps 1 to 3**. It never means proceed without one.
+
 **Q0. BEFORE ANY QUESTION: read what this project already decided and already rejected.**
 [ADDED 2026-08-31, and it cost 180 credits to learn.]
 
