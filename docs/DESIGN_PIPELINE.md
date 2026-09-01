@@ -390,19 +390,38 @@ text A/B/C. The order matters: each answer narrows the next.
    is literally named "brief + route + references" and the route was still skipped. If a required
    question can go missing from the list that exists to stop questions going missing, the list is
    not enough on its own.
+⚠ **EVERY BRACKETED LIST BELOW IS EXAMPLES, NOT OPTIONS.** [ADDED 2026-09-01, twice paid for.]
+Read one out as if it were the menu and the human picks the nearest item instead of saying the true
+thing. **"None of these, here is what it actually is" must be a live answer to every one of them.**
+Proof, both from the same project: question 8's list is wordmark / drawn mark / defer, and the real
+answer was **REUSE THE EXISTING MARK**, which is not on the list and which the logo step then had no
+branch for either, so the gap propagated. Question 3's list is contact / sign up / buy / understand,
+and the real answer was "understood and remembered, AND there is a button" — a combination the list
+does not offer. A closed list that is missing the true answer does not fail loudly. It quietly
+returns the second-best one and everything downstream is built on it.
+
 1. **Whose is it, and what is it called?**
-2. **What are we building?** (marketing site / product interface / single page / brand piece)
-3. **When it works, what has the visitor done?** (made contact / signed up / bought / just understood)
+2. **What are we building?** (examples: marketing site / product interface / single page / brand piece)
+3. **When it works, what has the visitor done?** (examples: made contact / signed up / bought / just
+   understood — and it is frequently more than one of these at once)
 4. **Who is it for?**
 5. **What is the claim it rests on, in one line?**
 6. **How should it feel?** (this is what later decides which references get pulled)
+   ⚠ **A FEELING WORD IS NOT AN ANSWER UNTIL IT IS RESTATED AS WHAT IS LITERALLY ON SCREEN.**
+   [ADDED 2026-09-01.] "Show the machinery" was given here and it is ambiguous between two completely
+   different pages: real product screenshots, or a generated film of a machine. It went into the brief
+   in the second sense only because it was queried at the last moment. Whatever word comes back, ask
+   the follow-up: **"so what is the visitor actually looking at?"** and write THAT into the brief, with
+   the feeling word beside it. A feeling steers a reference pull; only a description steers a build.
 6b. **IF THE ROUTE IS C: what does the motion actually SHOW?** Not "there is a video", but what the
    visitor watches happen. Added 2026-08-27 after three reference shortlists were produced without
    it, all useless. The answer changes what a good reference even is: a film that runs THROUGH the
    scroll needs a reference that holds content over footage across a long scroll, which is a
    completely different site from one with a hero clip and ordinary sections below it.
 7. **Light, dark, or both?**
-8. **What kind of logo?** (wordmark / drawn mark / defer) - Step 0.2 refuses to run without this.
+8. **What kind of logo?** (examples: wordmark / drawn mark / defer / **REUSE AN EXISTING MARK**)
+   - Step 0.2 refuses to run without this. ⚠ Reuse was missing from this list until 2026-09-01
+   and it is the commonest answer of all on any company that already exists.
 9. **How many screens?**
 
 **Q2b. PAGE STRUCTURE. Ask this on BOTH routes. [ADDED 2026-08-28]**
