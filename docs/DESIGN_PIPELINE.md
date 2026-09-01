@@ -340,6 +340,36 @@ describes HOW it is obtained, and it did not exist until 2026-08-27. Its absence
 projects and an entire session: without a written order, the agent reconstructed one badly, in front
 of Roger, and filled two fields in by itself along the way.
 
+**Q0. BEFORE ANY QUESTION: read what this project already decided and already rejected.**
+[ADDED 2026-08-31, and it cost 180 credits to learn.]
+
+**GREENFIELD DOES NOT MEAN AMNESIA.** It means: do not carry old ANSWERS over as if they were still
+true, and never fill a field in from an old document. It does NOT mean: pretend the project has no
+history. Those are different things and the method did not tell them apart.
+
+**What happened.** A visual direction was LOCKED on 2026-08-19 after three concept images and a
+human taste call. A clip was generated against it and REJECTED, with the reason written down. A
+corrected concept was written the next day that diagnosed the failure exactly and specified the fix.
+Eleven days later the same step was re-run "on a green field", consulted none of it, produced a
+weaker answer, and spent 180 credits reproducing a failure that was already documented on disk in
+the same repository. The rejection reason the second time was almost word for word the first one.
+
+**So, before Q1, do this and put the result in the chat:**
+
+1. **List the project's own design documents** (`docs/*.md`, concept files, session state, resume
+   docs) and the dates on them. `git log` the design directory. Two minutes.
+2. **Name, out loud, every DECISION that was locked and every thing that was REJECTED, with the
+   reason.** A rejection with a written reason is the most valuable artifact a project has: it is
+   the only thing that stops the same mistake being paid for twice.
+3. **Ask the human which of those still stand.** One question, listing them. He may keep all of
+   them, throw all of them out, or split. That is his call and it takes one exchange.
+4. **Only then start Q1.** Anything he keeps is now a supplied value, so it enters the brief
+   legitimately without breaking the no-assumptions rule.
+
+**The distinction, stated once so it cannot be lost again:** an old ANSWER is an assumption and may
+not be reused. An old REJECTION is evidence and must not be discarded. A locked DECISION is neither
+until the human says which it is, so ask.
+
 **Q1. ASK FIRST: is there a requirements document this brief has to derive from?**
 - **YES ->** get its location, read it, name it in the brief with the date read, and run 0.1-PRE:
   copy its exclusions in VERBATIM with the line they came from, and confirm every requirement ID.
@@ -424,14 +454,37 @@ to animate it. Getting this backwards costs hours: you end up trying to design a
 that does not exist.
 
 1. **Which sections are animated?**
-2. **What is the subject, in one noun?**
+2. **What is the subject, and WHAT COMES OFF THE LINE?** Two answers, not one.
+   ⚠ **"In one noun" was the original wording and it produced a rejected film on 2026-08-31.**
+   The answer given was "a factory". A factory is the SETTING. The prompt that came out of it said
+   `raw material` and `the object`, never what was being made, and the model filled the vacuum with
+   the most statistically ordinary thing a factory makes: a lump of metal. 180 credits.
+   So ask BOTH, and write both into the brief:
+   - **What is the setting?** Where does this happen and what does it look like.
+   - **What is the OBJECT that persists for the whole clip, and what has it become by the end?**
+     There must be ONE thing on screen the whole time that visibly changes. Legibility comes from
+     PERSISTENCE, not from explanation. A clip where nothing carries across the stages is a mood
+     sequence, and it gets rejected with "I don't understand what's being shown" (Roger, twice, on
+     two different clips, 2026-08-18 and 2026-08-31).
+   **THE TEST:** a stranger who cannot read a single word on the page must be able to say what this
+   company makes, from the clip alone. If the answer to "what comes off the line" is not something
+   they would recognise, the clip cannot pass that test no matter how well it is generated.
 3. **What happens, stage by stage, with SECONDS attached?** The reference prompts are shot lists with
    a clock: front-on for the first three seconds, then rotate and zoom over three, then a top-down pan
    for three, then it exits frame. Not a mood.
 4. **What is the camera doing?** ONE unbroken move. A cut kills a scroll-driven interaction.
 5. **What does the final frame look like?** It becomes the end-state pin. Skipping it is what made
    separate clips drift until a finished house lost its windows.
-6. **What must never appear?** People, text, logos, interface.
+6. **What must never appear?** ASK IT. Do not read the list below as the answer.
+   ⚠ **This line used to read "People, text, logos, interface" as a flat statement, and that is
+   how it was banked into a brief nobody questioned.** `no interface elements` then went verbatim
+   into the generation prompt — on a film whose entire job was to show that this company makes
+   SOFTWARE. The one device that could have carried the meaning was forbidden by a default.
+   People / text / logos / interface are the USUAL answers and they are usually right. **Interface
+   is the one that is often wrong**, because a glowing screen is how a physical metaphor says
+   "software". So for each item on the list, ask: does banning this also ban the thing the clip has
+   to communicate? A prohibition list is a craft rule. **A craft rule that removes the meaning is
+   not a craft rule, it is a mistake.**
 7. **Light, materials, palette, lens.** Concrete. **Never the word "cinematic"**, which returns the
    model's average of everything.
 8. **Scroll behaviour for this section.** Does it pin. What progresses. What appears, and at which
