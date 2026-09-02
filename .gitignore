@@ -1,0 +1,11 @@
+# Editor and hand-made backup copies. A stray *.bak file shows up in `git status`
+# as untracked and reads exactly like somebody's unsaved work — that mistake cost
+# six days of a work-board row (2026-08-27 .. 2026-09-02). Backups belong in git
+# history, not next to the file.
+*.bak
+*.bak-*
+*.orig
+*~
+
+node_modules/
+.DS_Store
