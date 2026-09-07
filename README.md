@@ -16,9 +16,9 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **Design Review Command** | `.claude/commands/design-review.md` | `/design-review` slash command for current branch |
 | **Code Review Command** | `.claude/commands/code-review.md` | `/code-review` slash command for current branch |
 | **Security Review Command** | `.claude/commands/security-review.md` | `/security-review` slash command for current branch |
-| **Code Review Action** | `.github/workflows/code-review.yml` | Automated PR code review |
-| **Design Review Action** | `.github/workflows/design-review.yml` | Automated PR design review (frontend files only) |
-| **Security Review Action** | `.github/workflows/security-review.yml` | Automated PR security review |
+| **Code Review Action** | `.github/workflows/code-review.yml` | Automated PR code review — **off unless armed**, see below |
+| **Design Review Action** | `.github/workflows/design-review.yml` | Automated PR design review, frontend files only — **off unless armed** |
+| **Security Review Action** | `.github/workflows/security-review.yml` | Automated PR security review — **off unless armed** |
 | **Design Principles** | `context/design-principles.md` | Customizable design checklist template |
 | **Style Guide** | `context/style-guide.md` | Customizable brand style guide template |
 | **CLAUDE.md Template** | `CLAUDE.md.template` | Base CLAUDE.md with visual development section |
@@ -140,7 +140,17 @@ This happens because of the "Quick Visual Check" section in CLAUDE.md.
 
 ### Automated on PRs
 
-GitHub Actions trigger automatically when a PR is opened or updated:
+The three review workflows are **switched off** and copying them into a project does not
+switch them on. They bill the Anthropic API by the token, and a standing rule (2026-08-29)
+reserves that key for work a customer triggers inside a product; reviews use the interactive
+Claude Code session instead, which the subscription already covers. Each job is gated on the
+repository variable `AI_REVIEW_ENABLED`, which is unset everywhere, so the job is **skipped** —
+no review, no red check, no spend. Use the `/code-review`, `/design-review` and
+`/security-review` commands above instead; they do the same job and cost nothing per token.
+
+Arming them anywhere is a spending decision and Roger's alone. If it is ever taken, set
+`AI_REVIEW_ENABLED=true` **and** add `ANTHROPIC_API_KEY` on that repo — with the variable set
+and no key the job fails loudly rather than passing green having read nothing. Once armed:
 - **Code review** runs on every PR
 - **Design review** runs only when frontend files (`.tsx`, `.css`, `.html`, etc.) are modified
 - **Security review** runs on every PR

@@ -6,25 +6,74 @@ on:
 
 jobs:
   code-review:
-    if: github.event.pull_request.draft == false
+    # OFF BY STANDING RULE (Roger, 2026-08-29). The AI reviewers must never spend Anthropic
+    # API credits: "CI reviews, code review bots, security review bots, design review bots ...
+    # use the interactive Claude Code session, which is covered by the subscription". That day
+    # the API key was deleted from 10 repos and these three workflows were switched off in 9 of
+    # them. This repo was the tenth: the key went, the workflows stayed on, and every pull
+    # request since has been blocked by a reviewer that cannot authenticate at all
+    # ("Could not fetch an OIDC token") and has therefore reviewed nothing.
+    #
+    # The switch is a repository VARIABLE, not the workflow's enabled/disabled state, because
+    # this repo exists to be copied into new projects. A disabled workflow is enabled again the
+    # moment its file is copied, so the copy would carry the fault with it; a variable travels
+    # with the file and is unset in a new repo by default. Unset, this job is SKIPPED - never
+    # green, never red, never billed. Arming it is a spending decision and Roger's alone.
+    #
+    # If it is ever armed, take the proven form from Predivo-GmbH/predivo's copy of this file:
+    # it adds a guard that fails the build when the reviewer runs but posts no comment, which
+    # is how a review gate goes green having said nothing.
+    if: >-
+      github.event.pull_request.draft == false
+      && vars.AI_REVIEW_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     permissions:
       contents: read
       pull-requests: write
       issues: write
+      # claude-code-action@v1 exchanges an OIDC token for its GitHub App token even when
+      # an API key is supplied. Without this it dies with "Could not fetch an OIDC token"
+      # after ~30s and the gate goes red having reviewed nothing.
+      id-token: write
     steps:
+      - name: Say so when armed without a key
+        if: env.HAS_KEY != 'true'
+        run: |
+          echo "::error::AI_REVIEW_ENABLED is set but ANTHROPIC_API_KEY is not, so this review cannot run."
+          echo "A review that cannot run must not report success - that is how unreviewed changes get merged."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Run Code Review
+        if: env.HAS_KEY == 'true'
         uses: anthropics/claude-code-action@v1
         with:
-          model: claude-sonnet-4-6
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          direct_prompt: |
+          # Post as the repo's own Actions bot. Without a token the action tries to mint
+          # one from the Claude Code GitHub App and dies with "not installed on this
+          # repository"; GITHUB_TOKEN keeps this in version control and grants no
+          # third-party app any access to the organisation.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          use_sticky_comment: true
+          claude_args: --model claude-sonnet-4-6 --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Read,Glob,Grep"
+          prompt: |
+            BEFORE ANYTHING ELSE, understand how this run is judged.
+            You MUST finish by posting to the pull request. Your reply text is discarded and
+            nobody reads it - a review nobody can read is the same as no review.
+            - `gh pr comment` for the overall verdict. ALWAYS post this, every run, including runs
+              where nothing has changed and runs where you find nothing at all. "No new findings
+              since my last review" is a valid and useful verdict. Silence is not.
+            - `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) for each
+              specific issue, anchored to file and line.
+            - Post GitHub comments only. Do not return the review as your message text.
+
             You are the Principal Engineer AI Reviewer enforcing the "Pragmatic Quality" framework.
             Balance rigorous engineering standards with development speed.
 
@@ -51,10 +100,3 @@ jobs:
             - **[Nit]**: Optional polish
 
             Be constructive. Explain the engineering principle behind each suggestion.
-          allowed_tools: |
-            Bash(git diff:*)
-            Bash(git log:*)
-            Bash(git show:*)
-            Read
-            Glob
-            Grep
