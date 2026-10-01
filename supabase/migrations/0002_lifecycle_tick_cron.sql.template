@@ -1,0 +1,46 @@
+-- Template: pg_cron job for lifecycle-tick. Rename to your project's own
+-- migration-timestamp convention (after 0001_lifecycle_email) before applying.
+--
+-- SOURCE: carried over from ChannelMover's `20260824002_lifecycle_tick_cron.sql`
+-- (live since 2026-08-25). Every 5 minutes.
+--
+-- Safe to run as often as it likes: every decision the tick makes is idempotent,
+-- because the ledger's unique indexes (migration 0001) refuse a second send of the
+-- same step. A missed run, an overlapping run or a crashed run changes only WHEN an
+-- email arrives, never whether it arrives twice.
+--
+-- Auth and secret handling: the URL and the service-role key come from THIS
+-- project's own Vault (`vault.decrypted_secrets`), the same pattern used by every
+-- other fleet cron job (e.g. a migration-watchdog or similar scheduled function you
+-- may already have). That makes this one file correct on staging and production
+-- with no hand-editing. ChannelMover's own comment on this point: ReplyFlow's
+-- equivalent carries a `<<SERVICE_ROLE_KEY>>` placeholder that must be replaced by
+-- hand in the SQL editor, which is exactly why nobody could ever prove it had been
+-- done there. Don't repeat that.
+--
+-- PREREQUISITE: this project's Vault must already hold the secrets named
+-- 'supabase_url' and 'service_role_key'. If this is the FIRST cron job in the
+-- project, seed them once (Management API, not in a migration — a migration cannot
+-- read its own project's URL or signing key) before applying this file.
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+
+-- Idempotent: re-running this migration must not create a second schedule.
+SELECT cron.unschedule('lifecycle-tick')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'lifecycle-tick');
+
+SELECT cron.schedule(
+  'lifecycle-tick',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_post(
+    url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'supabase_url') || '/functions/v1/lifecycle-tick',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key'),
+      'Content-Type', 'application/json'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);

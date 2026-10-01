@@ -29,6 +29,7 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **CORS Helper** | `supabase/functions/_shared/cors.template.ts` | Dynamic CORS with origin allowlist |
 | **SPA .htaccess** | `public/.htaccess.template` | Apache rewrite for client-side routing on Metanet |
 | **MCP Config Template** | `.mcp.json.template` | Team-shared Playwright MCP config |
+| **Lifecycle Email** | `supabase/functions/lifecycle-tick/`, `_shared/lifecycle-*.template.ts`, `supabase/migrations/000{1,2}_lifecycle_*.sql.template` | Sign-up-to-paid follow-up email: kill switch, once-per-person ledger, internal-account filter, staging test-recipient guard, backfill-safe first run, bounce/unsubscribe. Extracted from ChannelMover's production setup. See `docs/LIFECYCLE_EMAIL.md`. |
 
 ---
 
@@ -93,6 +94,12 @@ cp /path/to/project-starter/public/.htaccess.template public/.htaccess
    - Supabase-backed → `deploy-supabase-staged.yml.template` (replace the `{{PLACEHOLDERS}}`; this is the one with the manual prod gate + staging E2E). Then add the project to the Deploy-Status dashboard (`FLEET` array in BackOffice's `deploy-status` edge fn).
 5. **`.github/workflows/keep-alive.yml.template`** — Rename to `keep-alive.yml` (if Supabase free tier)
 6. **`supabase/functions/_shared/cors.ts`** — Replace `[SUBDOMAIN]` with your actual subdomain
+
+### Step 2b: Lifecycle email (if the product has sign-ups)
+
+Every new product ships follow-up email from day one — see `docs/LIFECYCLE_EMAIL.md`
+for the full copy/fill-in/prove-on-staging walkthrough; it is not a short checklist
+item like the others above, so it gets its own doc rather than a bullet here.
 
 ### Step 3 (Optional): Team MCP Config
 
