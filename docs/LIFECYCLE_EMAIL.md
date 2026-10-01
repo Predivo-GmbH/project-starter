@@ -157,6 +157,10 @@ what "the next step" means for your product. The Cockpit's per-product Distribut
 view (plan section G) is where this is meant to surface across the fleet — that view
 is tracked separately and is not part of this starter.
 
+That Distribution view reads `public.distribution_facts`, which IS part of this
+starter — see `docs/ATTRIBUTION.md` for sign-up source tracking (UTM/referrer
+capture, the "How did you hear about us?" prompt, and the contract view itself).
+
 ## 7. What a new product still has to do by hand
 
 - Write `collectUserSnapshots()` against its real schema (no default exists).
