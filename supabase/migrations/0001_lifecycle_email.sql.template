@@ -1,0 +1,220 @@
+-- Template: lifecycle email foundation for {{APP_NAME}} — the safety layer, before
+-- anything can send. Rename to your project's own migration-timestamp convention
+-- (e.g. 20261001001_lifecycle_email.sql) before applying; the "0001" here is a
+-- placeholder ordering marker, not a real timestamp.
+--
+-- SOURCE: carried over from ChannelMover's `20260824001_lifecycle_email.sql` (live in
+-- production since 2026-08-25). One schema change from the source: `migration_id`
+-- is generalised to `context_id` (no FK), because a product-agnostic starter cannot
+-- know your secondary key (ChannelMover's is a migration; yours might be a demo
+-- session, an invoice, or nothing at all). If you DO have a natural secondary key,
+-- add your own FK to it in a follow-up migration — and decide ON DELETE SET NULL vs
+-- CASCADE deliberately: ChannelMover shipped SET NULL first and had to fix it to
+-- CASCADE on 2026-09-14 once its 30-day cleanup job started colliding with the
+-- partial unique index below (see ChannelMover `docs/INCIDENTS.md` is not where that
+-- lives — see its migrations `20260914001_...` / `20260915003_...cascade...`). Don't
+-- repeat that: decide the delete behaviour up front, matching your own retention job.
+--
+-- What this migration builds, and why, in Roger's own words (2026-08-24): "we do not
+-- bother anyone that doesn't want to be bothered."
+--
+--   1. Every recipient can leave, and leaving is honoured forever.
+--   2. Nobody can receive the same email twice, even if a worker retries or the cron
+--      fires twice. Enforced by a unique index, not by careful code.
+--   3. One row can stop every lifecycle send in the product.
+--
+-- Service-role only. Nothing here sends anything: no trigger that emails anyone, no
+-- cron (that is migration 0002), no function calls these tables yet.
+--
+-- RULE: every migration that creates a public table grants its own access — the
+-- GRANT/REVOKE block below is in THIS file, not a follow-up.
+
+-- ── who may be emailed, and the token that stops it ─────────────────────────────
+CREATE TABLE IF NOT EXISTS public.email_preferences (
+  user_id            uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- Denormalized, lowercased copy of auth.users.email. Exists so the Postmark bounce
+  -- webhook (postmark-webhook/index.ts) can suppress an address with NO dependency on
+  -- whatever "profiles" table shape your product happens to have. Kept in sync by the
+  -- two triggers below, at signup and on email change.
+  email              text,
+  unsubscribe_token  uuid NOT NULL DEFAULT gen_random_uuid(),
+  suppressed_at      timestamptz,
+  suppressed_reason  text,
+  created_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS email_preferences_token_idx
+  ON public.email_preferences (unsubscribe_token);
+
+CREATE INDEX IF NOT EXISTS email_preferences_email_idx
+  ON public.email_preferences (email);
+
+COMMENT ON TABLE public.email_preferences IS
+  'One row per user. suppressed_at set => never send lifecycle mail to this person '
+  'again, for any reason: they unsubscribed, or we hard-bounced, or they are one of '
+  'our own accounts. Checked before EVERY send, receipts included.';
+
+COMMENT ON COLUMN public.email_preferences.suppressed_reason IS
+  'unsubscribe | hard_bounce | spam_complaint | internal';
+
+-- Everyone who already exists gets a token and a synced email, so an unsubscribe
+-- link can always be built and a bounce can always be matched without a write at
+-- send time.
+INSERT INTO public.email_preferences (user_id, email)
+SELECT id, lower(email) FROM auth.users
+ON CONFLICT (user_id) DO NOTHING;
+
+-- ── what has already been sent, so it can never be sent twice ───────────────────
+CREATE TABLE IF NOT EXISTS public.lifecycle_emails (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  step          text NOT NULL,
+  -- Generic secondary key. NULL for every step in the default event map
+  -- (events.template.ts) — all account-level. Add your own FK in a follow-up
+  -- migration only if you add a step scoped to something narrower than the person.
+  context_id    uuid,
+  sent_at       timestamptz NOT NULL DEFAULT now(),
+  subject       text,
+  postmark_id   text
+);
+
+-- THE trap this table exists to avoid, and the reason there are two indexes rather
+-- than one UNIQUE (user_id, step, context_id) constraint:
+--
+--   In Postgres a NULL is never equal to another NULL, so a unique constraint whose
+--   columns include a nullable context_id does NOT constrain the rows where it is
+--   null. Account-level steps (every step in the default event map) could duplicate
+--   freely — silently, and only in production, where the same person hits the same
+--   state twice. This is precisely the class of defect ChannelMover shipped and fixed
+--   within hours of going live (docs/INCIDENTS.md, 2026-08-25: one customer received
+--   the same email twice because a stale build was running without the per-step guard
+--   — the ledger's own index is what makes that impossible at the database layer).
+--
+-- So: one partial index per case. Together they say "this person gets this step once,
+-- and once per context where a context is involved".
+CREATE UNIQUE INDEX IF NOT EXISTS lifecycle_emails_once_per_context
+  ON public.lifecycle_emails (user_id, step, context_id)
+  WHERE context_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS lifecycle_emails_once_per_user
+  ON public.lifecycle_emails (user_id, step)
+  WHERE context_id IS NULL;
+
+-- The tick scans by step and recency to decide who is due.
+CREATE INDEX IF NOT EXISTS lifecycle_emails_step_sent_idx
+  ON public.lifecycle_emails (step, sent_at DESC);
+
+COMMENT ON TABLE public.lifecycle_emails IS
+  'The send ledger. A row is written BEFORE the email goes out: a unique violation '
+  'means it was already sent, which is how a retry stops being a second email.';
+
+-- ── the kill switch ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.lifecycle_config (
+  id       boolean PRIMARY KEY DEFAULT true CHECK (id),
+  enabled  boolean NOT NULL DEFAULT false,
+  note     text
+);
+
+INSERT INTO public.lifecycle_config (id, enabled, note)
+VALUES (true, false, 'Off by default. One UPDATE stops every lifecycle send in the product.')
+ON CONFLICT (id) DO NOTHING;
+
+COMMENT ON TABLE public.lifecycle_config IS
+  'Single row. enabled=false means no lifecycle email is sent by anything, whatever '
+  'the triggers think. Checked first, on every send. To stop everything: '
+  'UPDATE public.lifecycle_config SET enabled = false;';
+
+-- ── lockdown + grants (same migration that created the tables) ──────────────────
+-- RLS on with no policy, and every grant revoked from the client roles. These
+-- tables are system state; a signed-in user has no business reading who has been
+-- emailed, and every function above runs with the service role.
+ALTER TABLE public.email_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lifecycle_emails  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.lifecycle_config  ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.email_preferences FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.lifecycle_emails  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.lifecycle_config  FROM PUBLIC, anon, authenticated;
+
+GRANT ALL ON public.email_preferences TO service_role;
+GRANT ALL ON public.lifecycle_emails  TO service_role;
+GRANT ALL ON public.lifecycle_config  TO service_role;
+
+-- ── new accounts get a preferences row automatically ───────────────────────────
+-- Without this, only the users who existed when this migration ran have a token,
+-- and every send to a newer account would have to create one first.
+CREATE OR REPLACE FUNCTION public.create_email_preferences_for_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  INSERT INTO public.email_preferences (user_id, email)
+  VALUES (NEW.id, lower(NEW.email))
+  ON CONFLICT (user_id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_email_preferences_for_new_user() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS on_auth_user_created_email_preferences ON auth.users;
+CREATE TRIGGER on_auth_user_created_email_preferences
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.create_email_preferences_for_new_user();
+
+-- ── keep the denormalized email in sync if a user changes it ───────────────────
+-- Without this, the postmark-webhook lookup (by email) silently stops matching a
+-- person who changed their address, and a bounce on their NEW address never
+-- suppresses them.
+CREATE OR REPLACE FUNCTION public.sync_email_preferences_email()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.email IS DISTINCT FROM OLD.email THEN
+    UPDATE public.email_preferences SET email = lower(NEW.email) WHERE user_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.sync_email_preferences_email() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS on_auth_user_email_changed_email_preferences ON auth.users;
+CREATE TRIGGER on_auth_user_email_changed_email_preferences
+  AFTER UPDATE OF email ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.sync_email_preferences_email();
+
+-- ── BACKFILL-SAFE FIRST RUN ───────────────────────────────────────────────────
+-- Without this block, the moment lifecycle-tick is switched on it evaluates every
+-- EXISTING user against every event's isDue() — and several of those (stuck_day7,
+-- win_back_30, trial_ended, ...) are near-certainly already true for anyone who
+-- signed up more than a few days ago. The first tick would tell a two-month-old
+-- customer they "just signed up", which reads as a broken product, not a helpful
+-- one. ChannelMover's build seeded "not sent: predates lifecycle email" for every
+-- existing migration's steps on 2026-08-24, for exactly this reason.
+--
+-- Seed every default event-map step (events.template.ts, LIFECYCLE_STEP_KEYS) as
+-- already-sent for every user who exists BEFORE this migration runs. Only brand-new
+-- signups after this point enter the real flow. If you edit the event map, edit this
+-- list to match — the two are meant to be kept in sync by hand, and
+-- `tests/lifecycle/events.test.ts` asserts they have not drifted apart.
+INSERT INTO public.lifecycle_emails (user_id, step, subject)
+SELECT u.id, s.step, 'not sent: predates lifecycle email (backfilled at migration time)'
+FROM auth.users u
+CROSS JOIN (VALUES
+  ('welcome'), ('stuck_day1'), ('stuck_day3'), ('stuck_day7'), ('first_result'),
+  ('demo_used_up'), ('demo_used_up_reminder'),
+  ('checkout_abandoned_same_day'), ('checkout_abandoned_next_day'),
+  ('trial_ending'), ('trial_ended'),
+  ('win_back_7'), ('win_back_30'),
+  ('payment_failed'), ('customer_quiet_14'), ('real_win')
+) AS s(step)
+-- Must name the partial index's predicate explicitly: with TWO partial unique
+-- indexes (once_per_context / once_per_user) and no unconditional one, a bare
+-- "ON CONFLICT DO NOTHING" cannot infer which arbiter to use and Postgres rejects it.
+ON CONFLICT (user_id, step) WHERE context_id IS NULL DO NOTHING;
