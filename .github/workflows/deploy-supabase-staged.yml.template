@@ -121,6 +121,7 @@ jobs:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.STAGING_FTP_USER }}
           FTP_PASS: ${{ secrets.STAGING_FTP_PASS }}
+          LFTP_PASSWORD: ${{ secrets.STAGING_FTP_PASS }}
         run: |
           sudo apt-get install -y lftp
           echo "{{STAGING_SITE_ID}}" > ./dist/.site-id
@@ -133,7 +134,7 @@ jobs:
           CMDS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4; mirror --reverse --no-perms --verbose ./dist/assets/ {{STAGING_DOMAIN}}/assets/; mirror --reverse --delete --no-perms --verbose --exclude '^assets/' --exclude .htpasswd --exclude cgi-bin/ ./dist/ {{STAGING_DOMAIN}}/; bye"
           n=0
           until [ $n -ge 4 ]; do
-            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
+            if lftp --env-password -u "$FTP_USER" "$FTP_HOST" -e "$CMDS"; then
               echo "Staging FTP deploy succeeded (attempt $((n+1)))"; exit 0
             fi
             n=$((n + 1)); echo "::warning::Staging FTP attempt $n failed (transient runner-side FTPS blip); retrying in 25s..."; sleep 25
@@ -162,6 +163,7 @@ jobs:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.STAGING_FTP_USER }}
           FTP_PASS: ${{ secrets.STAGING_FTP_PASS }}
+          LFTP_PASSWORD: ${{ secrets.STAGING_FTP_PASS }}
           ASSETS_DIR: "{{STAGING_DOMAIN}}/assets"
         run: |
           # GitHub wraps every run block in bash -e: a failing command substitution in an
@@ -176,7 +178,7 @@ jobs:
           set ssl:verify-certificate no; set ftp:ssl-protect-data no
           set ftp:passive-mode yes; set net:timeout 60"
 
-          LIST=$(timeout 180 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" <<SCRIPT 2>&1
+          LIST=$(timeout 180 lftp --env-password -u "$FTP_USER" "ftp://$FTP_HOST" <<SCRIPT 2>&1
           $SETTINGS
           find $ASSETS_DIR
           quit
@@ -196,7 +198,7 @@ jobs:
           # vanishes (550) between listing and probing.
           PROBE_SCRIPT=$(mktemp)
           {
-            echo "open -u $FTP_USER,$FTP_PASS ftp://$FTP_HOST"
+            echo "open --env-password -u $FTP_USER ftp://$FTP_HOST"
             echo "$SETTINGS"
             # find prints full remote paths ("$ASSETS_DIR/<nested>/file", recursively);
             # normalize to a path relative to ASSETS_DIR so either output format is safe.
@@ -235,7 +237,7 @@ jobs:
 
           DEL_SCRIPT=$(mktemp)
           {
-            echo "open -u $FTP_USER,$FTP_PASS ftp://$FTP_HOST"
+            echo "open --env-password -u $FTP_USER ftp://$FTP_HOST"
             echo "$SETTINGS"
             # lftp rm does NOT glob-expand - hashed names are passed verbatim.
             # $OLD already holds full remote paths (the PROBE: values).
@@ -386,12 +388,13 @@ jobs:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASS: ${{ secrets.FTP_PASS }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASS }}
         run: |
           sudo apt-get install -y lftp
           echo "{{SITE_ID}}" > ./dist/.site-id
           SETTINGS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4;"
           # Site-id guard — never deploy to the wrong target.
-          REMOTE_ID=$(lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$SETTINGS cat /httpdocs/.site-id; bye" 2>/dev/null | tr -d '[:space:]') || REMOTE_ID=""
+          REMOTE_ID=$(lftp --env-password -u "$FTP_USER" "$FTP_HOST" -e "$SETTINGS cat /httpdocs/.site-id; bye" 2>/dev/null | tr -d '[:space:]') || REMOTE_ID=""
           if [ -n "$REMOTE_ID" ] && [ "$REMOTE_ID" != "{{SITE_ID}}" ]; then
             echo "::error::DEPLOY ABORTED — remote .site-id is '$REMOTE_ID', expected '{{SITE_ID}}'. Wrong FTP target!"
             exit 1
@@ -403,7 +406,7 @@ jobs:
           CMDS="$SETTINGS mirror --reverse --no-perms --verbose ./dist/assets/ /httpdocs/assets/; mirror --reverse --delete --no-perms --verbose --exclude '^assets/' ./dist/ /httpdocs/; bye"
           n=0
           until [ $n -ge 4 ]; do
-            if lftp -u "$FTP_USER","$FTP_PASS" "$FTP_HOST" -e "$CMDS"; then
+            if lftp --env-password -u "$FTP_USER" "$FTP_HOST" -e "$CMDS"; then
               echo "Production FTP deploy succeeded (attempt $((n+1)))"; exit 0
             fi
             n=$((n + 1)); echo "::warning::Production FTP attempt $n failed (transient runner-side FTPS blip); retrying in 25s..."; sleep 25
@@ -431,6 +434,7 @@ jobs:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASS: ${{ secrets.FTP_PASS }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASS }}
           ASSETS_DIR: /httpdocs/assets
         run: |
           # GitHub wraps every run block in bash -e: a failing command substitution in an
@@ -445,7 +449,7 @@ jobs:
           set ssl:verify-certificate no; set ftp:ssl-protect-data no
           set ftp:passive-mode yes; set net:timeout 60"
 
-          LIST=$(timeout 180 lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST" <<SCRIPT 2>&1
+          LIST=$(timeout 180 lftp --env-password -u "$FTP_USER" "ftp://$FTP_HOST" <<SCRIPT 2>&1
           $SETTINGS
           find $ASSETS_DIR
           quit
@@ -465,7 +469,7 @@ jobs:
           # vanishes (550) between listing and probing.
           PROBE_SCRIPT=$(mktemp)
           {
-            echo "open -u $FTP_USER,$FTP_PASS ftp://$FTP_HOST"
+            echo "open --env-password -u $FTP_USER ftp://$FTP_HOST"
             echo "$SETTINGS"
             # find prints full remote paths ("$ASSETS_DIR/<nested>/file", recursively);
             # normalize to a path relative to ASSETS_DIR so either output format is safe.
@@ -504,7 +508,7 @@ jobs:
 
           DEL_SCRIPT=$(mktemp)
           {
-            echo "open -u $FTP_USER,$FTP_PASS ftp://$FTP_HOST"
+            echo "open --env-password -u $FTP_USER ftp://$FTP_HOST"
             echo "$SETTINGS"
             # lftp rm does NOT glob-expand - hashed names are passed verbatim.
             # $OLD already holds full remote paths (the PROBE: values).
