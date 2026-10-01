@@ -1,0 +1,69 @@
+-- Template: sign-up source tracking — the STANDARD attribution columns on
+-- `profiles`. Rename to your project's own migration-timestamp convention
+-- (after 0001/0002 lifecycle email, if you also copied those) before applying;
+-- the "0003" here is a placeholder ordering marker, not a real timestamp.
+--
+-- SOURCE: carried over from ChannelMover's `20260801004_attribution.sql` (live in
+-- production since 2026-08-05/10). Column names, types and the grant shape are
+-- copied verbatim — they are the contract every product must match so the
+-- Cockpit's `distribution_facts` view (0004_distribution_facts_view.sql.template)
+-- can read any product the same way. Do not rename these columns.
+--
+-- Part of Roger's approved distribution plan (2026-10-01), section C4: "every new
+-- product records where each sign-up came from, from day one, in a standard
+-- shape the Cockpit can read."
+--
+-- PREREQUISITE: this migration ALTERs `public.profiles`. Your product must
+-- already have that table (the usual Supabase pattern: `profiles.id uuid primary
+-- key references auth.users(id)`), created by your own earlier migration. This
+-- starter ships no base `profiles` table — only ChannelMover's sign-up follow-up
+-- machinery assumes one exists, same as this file does.
+--
+-- RULE: every migration that creates a public object grants its own access — the
+-- GRANT block below is in THIS file, not a follow-up.
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS utm_source       text,
+  ADD COLUMN IF NOT EXISTS utm_medium       text,
+  ADD COLUMN IF NOT EXISTS utm_campaign     text,
+  ADD COLUMN IF NOT EXISTS utm_content      text,
+  ADD COLUMN IF NOT EXISTS utm_term         text,
+  ADD COLUMN IF NOT EXISTS referrer         text,
+  ADD COLUMN IF NOT EXISTS how_heard        text,
+  ADD COLUMN IF NOT EXISTS how_heard_other  text;
+
+COMMENT ON COLUMN public.profiles.utm_source IS
+  'First-touch UTM param, captured client-side before signup (survives an OAuth '
+  'redirect via localStorage) or at email signup. Falls back to a `?from=` '
+  'shorthand when no explicit utm_source is present. See src/lib/attribution.ts.';
+COMMENT ON COLUMN public.profiles.referrer IS
+  'First-touch document.referrer, same-origin referrers excluded. Nullable, '
+  'best-effort — this is marketing analytics, not a critical path.';
+COMMENT ON COLUMN public.profiles.how_heard IS
+  'Self-reported answer to the one-tap "How did you hear about us?" prompt shown '
+  'once on first dashboard visit. One of the fixed option labels, or "Other".';
+COMMENT ON COLUMN public.profiles.how_heard_other IS
+  'Free-text follow-up when how_heard = ''Other''. Max 255 chars, trimmed '
+  'client-side before write.';
+
+-- Allow the owner to write ONLY these non-sensitive marketing columns. No billing
+-- or entitlement column is included here, and nothing billing-related should ever
+-- be added to this grant — self-reported attribution must never be a path to
+-- self-granting a paid tier or quota. If your `profiles` table already has a
+-- column-level UPDATE grant to `authenticated` for other self-serve fields
+-- (display name, avatar, etc.), this GRANT is additive to it, not a replacement.
+--
+-- No new RLS policy is needed: the existing "users can update their own profile"
+-- policy on `profiles` (USING + WITH CHECK auth.uid() = id) already scopes any
+-- UPDATE to the caller's own row — this grant only widens WHICH COLUMNS that
+-- policy's UPDATE may touch, never WHICH ROW.
+GRANT UPDATE (
+  utm_source,
+  utm_medium,
+  utm_campaign,
+  utm_content,
+  utm_term,
+  referrer,
+  how_heard,
+  how_heard_other
+) ON public.profiles TO authenticated;

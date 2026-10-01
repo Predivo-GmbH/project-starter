@@ -30,6 +30,7 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **SPA .htaccess** | `public/.htaccess.template` | Apache rewrite for client-side routing on Metanet |
 | **MCP Config Template** | `.mcp.json.template` | Team-shared Playwright MCP config |
 | **Lifecycle Email** | `supabase/functions/lifecycle-tick/`, `_shared/lifecycle-*.template.ts`, `supabase/migrations/000{1,2}_lifecycle_*.sql.template` | Sign-up-to-paid follow-up email: kill switch, once-per-person ledger, internal-account filter, staging test-recipient guard, backfill-safe first run, bounce/unsubscribe. Extracted from ChannelMover's production setup. See `docs/LIFECYCLE_EMAIL.md`. |
+| **Sign-up Source Tracking** | `src/lib/attribution.ts`, `src/hooks/useAttributionSync.ts`, `src/components/attribution/HowHeardPrompt.tsx`, `supabase/migrations/000{3,4}_*.sql.template` | First-touch UTM/referrer capture (survives an OAuth redirect; works for email sign-up too), once-after-login sync onto `profiles`, the "How did you hear about us?" prompt, and `public.distribution_facts` — the standard shape the Cockpit's Distribution view reads from every product. See `docs/ATTRIBUTION.md`. |
 
 ---
 
@@ -100,6 +101,12 @@ cp /path/to/project-starter/public/.htaccess.template public/.htaccess
 Every new product ships follow-up email from day one — see `docs/LIFECYCLE_EMAIL.md`
 for the full copy/fill-in/prove-on-staging walkthrough; it is not a short checklist
 item like the others above, so it gets its own doc rather than a bullet here.
+
+### Step 2c: Sign-up source tracking (every new product, from day one)
+
+Every new product records where each sign-up came from, in the standard shape
+the Cockpit reads — see `docs/ATTRIBUTION.md` for the full copy/wire/prove-on-staging
+walkthrough.
 
 ### Step 3 (Optional): Team MCP Config
 

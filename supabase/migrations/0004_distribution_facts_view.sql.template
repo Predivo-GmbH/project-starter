@@ -1,0 +1,114 @@
+-- Template: `public.distribution_facts` — THE CONTRACT the Cockpit's Distribution
+-- view reads from every product. Rename to your project's own
+-- migration-timestamp convention (after 0003_signup_source_tracking) before
+-- applying; the "0004" here is a placeholder ordering marker, not a real
+-- timestamp. Requires 0003 to have run first (the columns this view reads).
+--
+-- Part of Roger's approved distribution plan (2026-10-01), section G: one shape,
+-- read the same way across the whole fleet. The Cockpit never queries a
+-- product's `profiles` table directly — it queries THIS view, so a product can
+-- change its own schema freely as long as this view's column list never does.
+--
+-- THE CONTRACT (do not add, remove, rename or retype a column without updating
+-- every product's view AND the Cockpit's reader in the same change):
+--   user_id          uuid
+--   email            text
+--   signed_up_at     timestamptz
+--   utm_source       text
+--   utm_medium       text
+--   utm_campaign     text
+--   referrer_host    text
+--   how_heard        text
+--   how_heard_other  text
+--   first_result_at  timestamptz  -- NULL until this product's "first real result"; see below
+--   paid_at          timestamptz  -- NULL until this product's first payment; see below
+--
+-- service_role only. Nothing here is readable by anon or authenticated — the
+-- Cockpit reads it with the service-role key, the same way it reads every other
+-- fleet signal. A signed-in user has no business seeing fleet-wide attribution
+-- data through their own session, and self-reported attribution text (how_heard)
+-- should never be joinable back to a user's own session role.
+--
+-- RULE: every migration that creates a public object grants its own access — the
+-- GRANT/REVOKE block is in THIS file.
+
+-- ── referrer -> host, so the Cockpit groups "news.ycombinator.com" rather than
+-- every full article URL. Best-effort text parsing (no network, no extension):
+-- strip the scheme, strip a leading "www.", then cut at the first '/', '?' or
+-- '#'. Mirrors src/lib/attribution.ts#extractReferrerHost — the two are NOT
+-- generated from one source, so if you change one, change the other and compare
+-- a few real referrer values by hand; tests/attribution/attribution.test.ts
+-- covers the TS side only.
+CREATE OR REPLACE FUNCTION public.referrer_host(referrer text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+AS $$
+  SELECT NULLIF(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(lower(referrer), '^[a-z][a-z0-9+.-]*://', ''),  -- strip scheme
+        '^www\.', ''                                                    -- strip leading www.
+      ),
+      '[/?#].*$', ''                                                    -- cut at path/query/fragment
+    ),
+    ''
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.referrer_host(text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.referrer_host(text) TO service_role;
+
+-- ── the view itself ──────────────────────────────────────────────────────────
+-- security_invoker = true: run with the privileges of whoever QUERIES the view,
+-- not the view owner's. Belt-and-suspenders alongside the REVOKE below — even if
+-- a future grant mistake widened access to this view, security_invoker means the
+-- querying role still needs its own access to profiles/auth.users, which anon and
+-- authenticated do not have.
+CREATE OR REPLACE VIEW public.distribution_facts
+WITH (security_invoker = true)
+AS
+SELECT
+  p.id                      AS user_id,
+  u.email                   AS email,
+  u.created_at              AS signed_up_at,
+  p.utm_source              AS utm_source,
+  p.utm_medium              AS utm_medium,
+  p.utm_campaign            AS utm_campaign,
+  public.referrer_host(p.referrer) AS referrer_host,
+  p.how_heard               AS how_heard,
+  p.how_heard_other         AS how_heard_other,
+
+  -- ╔══════════════════════════════════════════════════════════════════════╗
+  -- ║ PLACEHOLDER — {{FIRST_RESULT_AT_EXPRESSION}}                          ║
+  -- ║ NULL until YOUR product's "first real result" event. The product     ║
+  -- ║ defines this (plan section E/G): the first demo that actually        ║
+  -- ║ finished, the first report generated, the first reply sent — whatever║
+  -- ║ "it worked for them once" means here. Replace the line below with a  ║
+  -- ║ real expression once that event has a home, e.g.:                   ║
+  -- ║   (SELECT MIN(r.created_at) FROM public.results r                   ║
+  -- ║     WHERE r.user_id = p.id AND r.status = 'succeeded')               ║
+  -- ╚══════════════════════════════════════════════════════════════════════╝
+  NULL::timestamptz         AS first_result_at,
+
+  -- ╔══════════════════════════════════════════════════════════════════════╗
+  -- ║ PLACEHOLDER — {{PAID_AT_EXPRESSION}}                                  ║
+  -- ║ NULL until this product's first payment. Replace with a real         ║
+  -- ║ expression once billing exists, e.g.:                                ║
+  -- ║   (SELECT MIN(i.paid_at) FROM public.invoices i                      ║
+  -- ║     WHERE i.user_id = p.id AND i.paid_at IS NOT NULL)                 ║
+  -- ╚══════════════════════════════════════════════════════════════════════╝
+  NULL::timestamptz         AS paid_at
+FROM public.profiles p
+JOIN auth.users u ON u.id = p.id;
+
+COMMENT ON VIEW public.distribution_facts IS
+  'THE CONTRACT the Cockpit reads for this product''s Distribution view (plan '
+  '2026-10-01, section G). Column list is fixed across the whole fleet — do not '
+  'rename, retype, add or remove a column here without updating the Cockpit '
+  'reader and every other product''s copy of this view in the same change. '
+  'service_role only.';
+
+REVOKE ALL ON public.distribution_facts FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.distribution_facts TO service_role;
