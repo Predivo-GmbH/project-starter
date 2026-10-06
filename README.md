@@ -24,6 +24,7 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **CLAUDE.md Template** | `CLAUDE.md.template` | Base CLAUDE.md with visual development section |
 | **Deploy Workflow (static)** | `.github/workflows/deploy.yml.template` | Metanet FTP zero-downtime deploy (lint→typecheck→test→build→FTP) |
 | **Deploy Workflow (Supabase-staged)** | `.github/workflows/deploy-supabase-staged.yml.template` | Full push→validate→staging→E2E chain, **manual prod gate**, pinned Supabase CLI + `--use-api`, retrying staging-alive check. Use for any Supabase-backed project. See `standards/deploy-standard.md`. |
+| **Live-asset guard** | `scripts/verify-live-assets.mjs`, `scripts/deploy-never-deletes-live-assets.test.mjs`, `.github/workflows/guards.yml` | Every deploy template's 14-day asset prune never deletes a file the build just uploaded, and each prune is followed by a check that the live pages load every file they reference (signalscore.ch ran unstyled for three days in Oct 2026 when a prune deleted its live stylesheet). The test pins both; `guards.yml` runs every offline `scripts/*.test.mjs` on each PR. |
 | **Keep-Alive Workflow** | `.github/workflows/keep-alive.yml.template` | Ping Supabase free-tier every 2 days to prevent pause |
 | **Auth Helper** | `supabase/functions/_shared/auth.template.ts` | JWT auth + admin/user client factory for edge functions |
 | **CORS Helper** | `supabase/functions/_shared/cors.template.ts` | Dynamic CORS with origin allowlist |
@@ -73,6 +74,12 @@ Settings → Secrets and variables → Actions → New repository secret
 cp -r /path/to/project-starter/.claude .claude
 cp -r /path/to/project-starter/.github .github
 cp -r /path/to/project-starter/context context
+
+# The deploy templates call scripts/verify-live-assets.mjs after the asset prune, and
+# .github/workflows/guards.yml runs the test that keeps that prune safe:
+mkdir -p scripts
+cp /path/to/project-starter/scripts/verify-live-assets.mjs scripts/
+cp /path/to/project-starter/scripts/deploy-never-deletes-live-assets.test.mjs scripts/
 cp /path/to/project-starter/CLAUDE.md.template CLAUDE.md
 
 # If using Supabase:
@@ -91,8 +98,9 @@ cp /path/to/project-starter/public/.htaccess.template public/.htaccess
 2. **`context/design-principles.md`** — Replace `<!-- CUSTOMIZE -->` sections with your design system
 3. **`context/style-guide.md`** — Replace with your brand colors, typography, component specs
 4. **Deploy workflow** — Rename ONE to `.github/workflows/deploy.yml`, fill placeholders:
-   - Static site → `deploy.yml.template` (replace `[SUBDOMAIN]` and `[APP_DIR]`)
+   - Static site → `deploy.yml.template` (replace the `{{PLACEHOLDERS}}`: `{{SITE_ID}}`, `{{PROD_DOMAIN}}`)
    - Supabase-backed → `deploy-supabase-staged.yml.template` (replace the `{{PLACEHOLDERS}}`; this is the one with the manual prod gate + staging E2E). Then add the project to the Deploy-Status dashboard (`FLEET` array in BackOffice's `deploy-status` edge fn).
+   - Either way: replace `{{PROD_DOMAIN}}` / `{{STAGING_DOMAIN}}` in `scripts/deploy-never-deletes-live-assets.test.mjs` (its `SITE` map) the same way, and list 3-5 real pages in each "Verify ... serves every file its pages need" step's `--pages`.
 5. **`.github/workflows/keep-alive.yml.template`** — Rename to `keep-alive.yml` (if Supabase free tier)
 6. **`supabase/functions/_shared/cors.ts`** — Replace `[SUBDOMAIN]` with your actual subdomain
 
