@@ -1,0 +1,58 @@
+name: Guard suites
+
+# Runs every offline scripts/*.test.mjs with `node --test` - DISCOVERED, NOT LISTED, so a guard added
+# tomorrow runs without anybody remembering to add a line here. Copied into every new project with
+# .github/ (README "Setup for a New Project"), so the guards that keep a product's deploy honest -
+# first among them scripts/deploy-never-deletes-live-assets.test.mjs (signalscore.ch ran unstyled for
+# three days in October 2026 when a deploy's prune deleted the live stylesheet) - run on every pull
+# request from day one.
+#
+# Absence is not success: an empty glob FAILS, otherwise a moved directory switches the whole thing off
+# while still printing green. *.prod.test.mjs and *.live.test.mjs are CARVED OUT (named, never silent):
+# a pull-request check must not reach production to decide whether a change is mergeable.
+#
+# No `npm ci`: the template has no package.json and its suites need only Node built-ins. A project
+# whose suites import its dependencies adds `- run: npm ci` before the guard step.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    runs-on: ubuntu-latest
+    # STANDARD: every job MUST cap its runtime (deploy-standard.md).
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22 # STANDARD: Node 22
+
+      - name: Guard suites (discovered, not listed)
+        run: |
+          set -e
+          shopt -s nullglob
+          suites=()
+          for f in scripts/*.test.mjs; do
+            case "$f" in
+              *.prod.test.mjs|*.live.test.mjs) echo "NOT run here (probes production): $f" ;;
+              *) suites+=("$f") ;;
+            esac
+          done
+          if [ ${#suites[@]} -eq 0 ]; then
+            echo "::error::no offline scripts/*.test.mjs found - the guard suites are not running"
+            exit 1
+          fi
+          echo "running ${#suites[@]} guard suite(s): ${suites[*]}"
+          node --test "${suites[@]}"
