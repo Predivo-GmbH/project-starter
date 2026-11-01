@@ -49,7 +49,7 @@ concurrency:
 
 jobs:
   validate-staging:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
@@ -73,7 +73,7 @@ jobs:
 
   deploy-staging:
     needs: validate-staging
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -286,7 +286,7 @@ jobs:
 
   e2e-staging:
     needs: deploy-staging
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -348,7 +348,7 @@ jobs:
   # and prod `deploy` needs them — so production cannot promote unless coverage AND security are green.
   gate-coverage:
     if: github.event_name == 'workflow_dispatch' # release-time gate (deploy-standard.md §4c)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
@@ -363,7 +363,7 @@ jobs:
 
   gate-security:
     if: github.event_name != 'push' # nightly + prod promotion, not every staging push (deploy-standard.md §4d)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -394,7 +394,7 @@ jobs:
     # §4: PRODUCTION only via manual dispatch with typed confirmation. A push to
     # {{BRANCH}} never reaches this job (staging + E2E only).
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'deploy'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5

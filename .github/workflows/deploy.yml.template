@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     # STANDARD: every job MUST cap its runtime. Without this, a hung FTP data
     # channel runs to GitHub's 360-min default kill — 6h of billed minutes per hang.
     timeout-minutes: 15
