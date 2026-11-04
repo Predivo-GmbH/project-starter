@@ -12,7 +12,7 @@ function headers(response: APIResponse) {
   expect.soft(h['strict-transport-security'], response.url()).toMatch(/max-age=(?:31536000|63072000);\s*includeSubDomains/i)
   expect.soft(h['x-content-type-options'], response.url()).toBe('nosniff')
   expect.soft(h['x-frame-options']).toBe('DENY')
-  expect.soft(h['referrer-policy']).toBe('no-referrer')
+  expect.soft(h['referrer-policy']).toBe('same-origin')
   expect.soft(h['permissions-policy']).toContain('camera=()')
   const csp = h['content-security-policy'] ?? ''
   expect.soft(csp).toContain("script-src 'self'")

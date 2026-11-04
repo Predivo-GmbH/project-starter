@@ -1,4 +1,4 @@
-// SR-HOST-02/03, SR-HDR-01..05: offline denial and browser-header regressions.
+// SR-HOST-02/03, SR-HDR-01..06: offline denial and browser-header regressions.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -32,6 +32,8 @@ function assertBrowserHeaders(text) {
     assert.doesNotMatch(active, new RegExp(`^\\s*Header set ${header}\\b`, 'mi'), `${header} must not use plain Header set`)
   }
   assert.match(active, /^\s*Options -Indexes\s*$/m, 'Options -Indexes must prevent directory listings')
+  assert.match(active, /^\s*Header always set Referrer-Policy "same-origin"\s*$/mi,
+    'Referrer-Policy must be same-origin (SR-HDR-06)')
   const csp = /^\s*Header always set Content-Security-Policy "([^"]+)"/mi.exec(active)?.[1] ?? ''
   const script = /(?:^|;)\s*script-src\s+([^;]+)/i.exec(csp)?.[1]
   assert.ok(script, 'CSP must have an explicit script-src')
@@ -104,6 +106,13 @@ for (const header of requiredHeaders) {
 test('directory-listing mutation: missing or reversed Options -Indexes fails', () => {
   for (const replacement of ['', 'Options +Indexes']) {
     assert.throws(() => assertBrowserHeaders(readPublicHtaccess().replace('Options -Indexes', replacement)), /Options -Indexes/)
+  }
+})
+
+test('Referrer-Policy mutation: outdated or cross-origin policies fail (SR-HDR-06)', () => {
+  for (const policy of ['no-referrer', 'unsafe-url', 'same-origin, no-referrer']) {
+    const broken = readPublicHtaccess().replace('Referrer-Policy "same-origin"', `Referrer-Policy "${policy}"`)
+    assert.throws(() => assertBrowserHeaders(broken), /Referrer-Policy must be same-origin/)
   }
 })
 
