@@ -23,6 +23,10 @@ concurrency:
   group: deploy-production
   cancel-in-progress: true
 
+# SR-SUP-06: read-only by default; elevate only in the job that needs it.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
@@ -30,9 +34,9 @@ jobs:
     # channel runs to GitHub's 360-min default kill — 6h of billed minutes per hang.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22 # STANDARD: Node 22
           cache: npm
@@ -40,7 +44,7 @@ jobs:
       # STANDARD (deploy-standard.md §3b): cache node_modules, skip npm ci on hit.
       - name: Cache node_modules
         id: node-cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
@@ -52,6 +56,19 @@ jobs:
         env:
           # Add project VITE_* build env here (from GitHub secrets).
           VITE_PLACEHOLDER: ${{ secrets.VITE_PLACEHOLDER }}
+
+      - name: Install gitleaks 8.24.3
+        run: |
+          # "$RUNNER_TEMP", not /tmp: /tmp is shared by every runner on the machine.
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          chmod +x "$RUNNER_TEMP/gitleaks"
+      # SR-FE-01, SR-HOST-04/05, SR-SUP-09: both guards block before any build upload.
+      - name: Refuse private files and secrets in the built bundle
+        run: |
+          set -euo pipefail
+          node scripts/check-dist-private-files.mjs dist
+          "$RUNNER_TEMP/gitleaks" dir dist --redact --exit-code 1
 
       - name: Deploy via FTPS (login encrypted, data channel clear)
         env:
@@ -66,6 +83,7 @@ jobs:
           # CANONICAL FTP settings — see deploy-standard.md. ssl-protect-data no keeps
           # login TLS-encrypted while sending the (public, static) data channel in clear,
           # which avoids the intermittent encrypted-passive-data-channel hang on GH-runner NAT.
+          # SR-HOST-06 (held): target is certificate-verified FTPS with PROT P or SFTP; see security-standard.md §5.
           SETTINGS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4;"
 
           # Site-id guard — never deploy to the wrong target.
@@ -115,6 +133,7 @@ jobs:
           export TZ=UTC
           DAYS=14
           CUTOFF=$(date -u -d "$DAYS days ago" +%Y%m%d%H%M%S)
+          # SR-HOST-06 (held): target is certificate-verified FTPS with PROT P or SFTP; see security-standard.md §5.
           SETTINGS="set ftp:ssl-force yes
           set ssl:verify-certificate no; set ftp:ssl-protect-data no
           set ftp:passive-mode yes; set net:timeout 60"
@@ -222,3 +241,7 @@ jobs:
       # list 3-5 real pages from the sitemap in --pages ("/" alone only proves the home page).
       - name: Verify production serves every file its pages need
         run: node scripts/verify-live-assets.mjs --base https://{{PROD_DOMAIN}} --pages / --dist dist
+
+      # SR-HDR-01/02: GET follows the browser path through Plesk; HEAD can give a false pass.
+      - name: Verify production browser security headers
+        run: node scripts/check-live-headers.mjs --base https://{{PROD_DOMAIN}} --pages /

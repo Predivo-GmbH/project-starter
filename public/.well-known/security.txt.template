@@ -1,0 +1,6 @@
+# SR-HOST-10: RFC 9116 vulnerability reporting contact; fill in the real contact.
+Contact: {{SECURITY_CONTACT}}
+# RFC 3339 timestamp, under one year ahead; renew before it expires.
+Expires: {{SECURITY_TXT_EXPIRES}}
+Preferred-Languages: de, en
+Canonical: https://{{PROD_DOMAIN}}/.well-known/security.txt

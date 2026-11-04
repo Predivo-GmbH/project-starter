@@ -28,12 +28,29 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **Keep-Alive Workflow** | `.github/workflows/keep-alive.yml.template` | Ping Supabase free-tier every 2 days to prevent pause |
 | **Auth Helper** | `supabase/functions/_shared/auth.template.ts` | JWT auth + admin/user client factory for edge functions |
 | **CORS Helper** | `supabase/functions/_shared/cors.template.ts` | Dynamic CORS with origin allowlist |
-| **SPA .htaccess** | `public/.htaccess.template` | Apache rewrite for client-side routing on Metanet |
+| **Hardened SPA .htaccess** | `public/.htaccess.template` | Browser security headers, private-file denial, caching and SPA routing on Metanet |
 | **MCP Config Template** | `.mcp.json.template` | Team-shared Playwright MCP config |
 | **Lifecycle Email** | `supabase/functions/lifecycle-tick/`, `_shared/lifecycle-*.template.ts`, `supabase/migrations/000{1,2}_lifecycle_*.sql.template` | Sign-up-to-paid follow-up email: kill switch, once-per-person ledger, internal-account filter, staging test-recipient guard, backfill-safe first run, bounce/unsubscribe. Extracted from ChannelMover's production setup. See `docs/LIFECYCLE_EMAIL.md`. |
 | **Sign-up Source Tracking** | `src/lib/attribution.ts`, `src/hooks/useAttributionSync.ts`, `src/components/attribution/HowHeardPrompt.tsx`, `supabase/migrations/000{3,4}_*.sql.template` | First-touch UTM/referrer capture (survives an OAuth redirect; works for email sign-up too), once-after-login sync onto `profiles`, the "How did you hear about us?" prompt, and `public.distribution_facts` — the standard shape the Cockpit's Distribution view reads from every product. See `docs/ATTRIBUTION.md`. |
 
 ---
+
+## Security from day one
+
+The rules live in [security-standard.md §5](<C:/Business/Internal Projects/standards/security-standard.md#5>); this starter implements them without duplicating the rulebook.
+
+- Hardened Apache headers, CSP, COOP, HTTPS redirects and cache policies: SR-HDR-01..09, SR-TLS-03.
+- Private-file and directory denial, with offline Vite-build and mutation tests: SR-HOST-02/03.
+- Build-output guard blocks source maps, source-map comments and private artifacts before upload: SR-HOST-04/05.
+- RFC 9116 `security.txt` contact template: SR-HOST-10.
+- Scanner-probe guard protects the shared host and office/build-laptop address; denial is proven offline: SR-HOST-11.
+- Visitor-only GET header checks for pages and linked CSS/JS, including staging E2E: SR-HDR-01/02.
+- Pinned Actions, explicit permissions and event-input guards: SR-SUP-05/06/07.
+- Blocking gitleaks CLI scans for event commits, working tree and built bundles: SR-SUP-09/10, SR-FE-01.
+
+Fill `{{PROD_DOMAIN}}`, `{{STAGING_DOMAIN}}`, `{{SUPABASE_PROJECT_REF}}`, `{{SECURITY_CONTACT}}` and `{{SECURITY_TXT_EXPIRES}}` wherever they appear. Use a real security contact URI and an RFC 3339 expiry under one year ahead. Rename the public and E2E `.template` files as shown below; keep `typescript@5.9.3` (the scanner uses its compiler API) and `vite` in the project's dev dependencies. The offline guard workflow discovers tests recursively under `scripts/`.
+
+On Plesk, turn **Smart static files processing** and **Serve static files directly by nginx** OFF (deploy-standard §5c), or the Apache headers will not reach browsers. nginx-made redirects/errors remain held under WEB-01; their staging assertions are retained as `fixme`. FTP transport hardening remains held under SR-HOST-06, with the documented settings preserved. Add optional PostHog EU, Sentry or Stripe CSP sources only when the project uses them; examples are in `.htaccess.template`.
 
 ## Prerequisites
 
@@ -75,11 +92,9 @@ cp -r /path/to/project-starter/.claude .claude
 cp -r /path/to/project-starter/.github .github
 cp -r /path/to/project-starter/context context
 
-# The deploy templates call scripts/verify-live-assets.mjs after the asset prune, and
-# .github/workflows/guards.yml runs the test that keeps that prune safe:
-mkdir -p scripts
-cp /path/to/project-starter/scripts/verify-live-assets.mjs scripts/
-cp /path/to/project-starter/scripts/deploy-never-deletes-live-assets.test.mjs scripts/
+# Deploy and security guards must travel together, including scripts/lib/:
+cp -r /path/to/project-starter/scripts .
+cp /path/to/project-starter/.gitleaks.toml .
 cp /path/to/project-starter/CLAUDE.md.template CLAUDE.md
 
 # If using Supabase:
@@ -87,9 +102,11 @@ mkdir -p supabase/functions/_shared
 cp /path/to/project-starter/supabase/functions/_shared/auth.template.ts supabase/functions/_shared/auth.ts
 cp /path/to/project-starter/supabase/functions/_shared/cors.template.ts supabase/functions/_shared/cors.ts
 
-# SPA routing for Metanet:
-mkdir -p public
+# Hardened SPA routing and security contact for Metanet:
+mkdir -p public/.well-known e2e/staging
 cp /path/to/project-starter/public/.htaccess.template public/.htaccess
+cp /path/to/project-starter/public/.well-known/security.txt.template public/.well-known/security.txt
+cp /path/to/project-starter/e2e/staging/security-headers.spec.ts.template e2e/staging/security-headers.spec.ts
 ```
 
 ### Step 2: Customize

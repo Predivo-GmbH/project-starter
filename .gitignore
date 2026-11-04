@@ -9,3 +9,6 @@
 
 node_modules/
 .DS_Store
+
+# Offline security fixtures and their isolated tool dependencies.
+test-results/

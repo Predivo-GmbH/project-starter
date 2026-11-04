@@ -47,19 +47,23 @@ concurrency:
   # Queue, never cancel — a cancelled prod deploy mid-FTP leaves the site half-updated.
   cancel-in-progress: false
 
+# SR-SUP-06: read-only by default; elevate only in the job that needs it.
+permissions:
+  contents: read
+
 jobs:
   validate-staging:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
       - name: Cache node_modules
         id: node-cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
@@ -76,14 +80,14 @@ jobs:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
       - name: Cache node_modules
         id: node-cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
@@ -108,13 +112,27 @@ jobs:
             echo 'AuthUserFile {{STAGING_VHOST_PATH}}/.htpasswd'
             echo 'Require valid-user'
             echo ''
-            cat /tmp/prod.htaccess
+            # The public template's SUPABASE_PROJECT_REF is filled with PROD_REF; staging uses its own API.
+            sed 's#https://{{PROD_REF}}.supabase.co#https://{{STAGING_REF}}.supabase.co#g' /tmp/prod.htaccess
             echo ''
             echo '# --- Staging overrides: never index staging ---'
             echo '<IfModule mod_headers.c>'
             echo '  Header always set X-Robots-Tag "noindex, nofollow"'
             echo '</IfModule>'
           } > dist/.htaccess
+
+      - name: Install gitleaks 8.24.3
+        run: |
+          # "$RUNNER_TEMP", not /tmp: /tmp is shared by every runner on the machine.
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          chmod +x "$RUNNER_TEMP/gitleaks"
+      # SR-FE-01, SR-HOST-04/05, SR-SUP-09: both guards block before any build upload.
+      - name: Refuse private files and secrets in the built bundle
+        run: |
+          set -euo pipefail
+          node scripts/check-dist-private-files.mjs dist
+          "$RUNNER_TEMP/gitleaks" dir dist --redact --exit-code 1
 
       - name: Deploy staging via FTP
         env:
@@ -131,6 +149,7 @@ jobs:
           # --delete but EXCLUDES assets/ so old hashed chunks survive for tabs still
           # running a previous index.html. Superseded chunks are pruned by AGE (14
           # days) in the step below — never deleted at deploy time.
+          # SR-HOST-06 (held): target is certificate-verified FTPS with PROT P or SFTP; see security-standard.md §5.
           CMDS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4; mirror --reverse --no-perms --verbose ./dist/assets/ {{STAGING_DOMAIN}}/assets/; mirror --reverse --delete --no-perms --verbose --exclude '^assets/' --exclude .htpasswd --exclude cgi-bin/ ./dist/ {{STAGING_DOMAIN}}/; bye"
           n=0
           until [ $n -ge 4 ]; do
@@ -143,7 +162,7 @@ jobs:
 
       # §3c: PINNED CLI version (never `latest`) + --use-api (no Docker/esm.sh).
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3 (v1 branch)
         with:
           version: {{CLI_VERSION}}
       - name: Deploy edge functions to staging
@@ -174,6 +193,7 @@ jobs:
           export TZ=UTC
           DAYS=14
           CUTOFF=$(date -u -d "$DAYS days ago" +%Y%m%d%H%M%S)
+          # SR-HOST-06 (held): target is certificate-verified FTPS with PROT P or SFTP; see security-standard.md §5.
           SETTINGS="set ftp:ssl-force yes
           set ssl:verify-certificate no; set ftp:ssl-protect-data no
           set ftp:passive-mode yes; set net:timeout 60"
@@ -284,19 +304,25 @@ jobs:
           VERIFY_BASIC_AUTH: ${{ secrets.STAGING_HTPASSWD_USER }}:${{ secrets.STAGING_HTPASSWD_PASS }}
         run: node scripts/verify-live-assets.mjs --base https://{{STAGING_DOMAIN}} --pages / --dist dist
 
+      # SR-HDR-01/02: GET follows the browser path through Plesk; HEAD can give a false pass.
+      - name: Verify staging browser security headers
+        env:
+          VERIFY_BASIC_AUTH: ${{ secrets.STAGING_HTPASSWD_USER }}:${{ secrets.STAGING_HTPASSWD_PASS }}
+        run: node scripts/check-live-headers.mjs --base https://{{STAGING_DOMAIN}} --pages /
+
   e2e-staging:
     needs: deploy-staging
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
       - name: Cache node_modules
         id: node-cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
@@ -305,7 +331,7 @@ jobs:
         run: npm ci
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -338,7 +364,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: staging-e2e-results
           path: playwright-report/
@@ -351,8 +377,8 @@ jobs:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -366,14 +392,14 @@ jobs:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
@@ -397,14 +423,14 @@ jobs:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
       - name: Cache node_modules
         id: node-cache
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
@@ -417,6 +443,19 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Install gitleaks 8.24.3
+        run: |
+          # "$RUNNER_TEMP", not /tmp: /tmp is shared by every runner on the machine.
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          chmod +x "$RUNNER_TEMP/gitleaks"
+      # SR-FE-01, SR-HOST-04/05, SR-SUP-09: both guards block before any build upload.
+      - name: Refuse private files and secrets in the built bundle
+        run: |
+          set -euo pipefail
+          node scripts/check-dist-private-files.mjs dist
+          "$RUNNER_TEMP/gitleaks" dir dist --redact --exit-code 1
+
       - name: Deploy via FTP (zero-downtime)
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
@@ -426,6 +465,7 @@ jobs:
         run: |
           sudo apt-get install -y lftp
           echo "{{SITE_ID}}" > ./dist/.site-id
+          # SR-HOST-06 (held): target is certificate-verified FTPS with PROT P or SFTP; see security-standard.md §5.
           SETTINGS="set ftp:ssl-force yes; set ssl:verify-certificate no; set ftp:ssl-protect-data no; set ftp:passive-mode yes; set ftp:prefer-epsv no; set net:timeout 30; set net:max-retries 4; set net:persist-retries 4; set net:reconnect-interval-base 8; set mirror:parallel-transfer-count 4;"
           # Site-id guard — never deploy to the wrong target.
           REMOTE_ID=$(lftp --env-password -u "$FTP_USER" "$FTP_HOST" -e "$SETTINGS cat /httpdocs/.site-id; bye" 2>/dev/null | tr -d '[:space:]') || REMOTE_ID=""
@@ -448,7 +488,7 @@ jobs:
           echo "::error::Production FTP deploy failed after 4 attempts"; exit 1
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3 (v1 branch)
         with:
           version: {{CLI_VERSION}}
       - name: Deploy edge functions to production
@@ -479,6 +519,7 @@ jobs:
           export TZ=UTC
           DAYS=14
           CUTOFF=$(date -u -d "$DAYS days ago" +%Y%m%d%H%M%S)
+          # SR-HOST-06 (held): target is certificate-verified FTPS with PROT P or SFTP; see security-standard.md §5.
           SETTINGS="set ftp:ssl-force yes
           set ssl:verify-certificate no; set ftp:ssl-protect-data no
           set ftp:passive-mode yes; set net:timeout 60"
@@ -586,3 +627,7 @@ jobs:
       # list 3-5 real pages from the sitemap in --pages ("/" alone only proves the home page).
       - name: Verify production serves every file its pages need
         run: node scripts/verify-live-assets.mjs --base https://{{PROD_DOMAIN}} --pages / --dist dist
+
+      # SR-HDR-01/02: GET follows the browser path through Plesk; HEAD can give a false pass.
+      - name: Verify production browser security headers
+        run: node scripts/check-live-headers.mjs --base https://{{PROD_DOMAIN}} --pages /

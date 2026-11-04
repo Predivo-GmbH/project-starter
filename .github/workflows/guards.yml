@@ -1,6 +1,6 @@
 name: Guard suites
 
-# Runs every offline scripts/*.test.mjs with `node --test` - DISCOVERED, NOT LISTED, so a guard added
+# Runs every offline scripts/**/*.test.mjs with `node --test` - DISCOVERED, NOT LISTED, so a guard added
 # tomorrow runs without anybody remembering to add a line here. Copied into every new project with
 # .github/ (README "Setup for a New Project"), so the guards that keep a product's deploy honest -
 # first among them scripts/deploy-never-deletes-live-assets.test.mjs (signalscore.ch ran unstyled for
@@ -11,8 +11,9 @@ name: Guard suites
 # while still printing green. *.prod.test.mjs and *.live.test.mjs are CARVED OUT (named, never silent):
 # a pull-request check must not reach production to decide whether a change is mergeable.
 #
-# No `npm ci`: the template has no package.json and its suites need only Node built-ins. A project
-# whose suites import its dependencies adds `- run: npm ci` before the guard step.
+# SR-HOST-11, SR-SUP-05/06/07: include the security suites in scripts/lib/. The template has no
+# package.json, so install only the TypeScript AST reader and Vite in an isolated copy. A scaffolded
+# project uses its own locked dev dependencies (typescript and vite must be present).
 
 on:
   push:
@@ -33,25 +34,36 @@ jobs:
     # STANDARD: every job MUST cap its runtime (deploy-standard.md).
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22 # STANDARD: Node 22
 
       - name: Guard suites (discovered, not listed)
         run: |
           set -e
-          shopt -s nullglob
+          if [ -f package.json ]; then
+            npm ci
+          else
+            mkdir -p test-results
+            fixture=$(mktemp -d "$PWD/test-results/security-guards-XXXXXX")
+            cp -R scripts public e2e .github "$fixture/"
+            cd "$fixture"
+            npm init -y >/dev/null
+            # The proven scanner guard uses the TypeScript 5 compiler API (absent in TypeScript 7).
+            npm install --no-audit --no-fund --save-dev typescript@5.9.3 vite@8.3.5
+          fi
+          shopt -s nullglob globstar
           suites=()
-          for f in scripts/*.test.mjs; do
+          for f in scripts/**/*.test.mjs; do
             case "$f" in
               *.prod.test.mjs|*.live.test.mjs) echo "NOT run here (probes production): $f" ;;
               *) suites+=("$f") ;;
             esac
           done
           if [ ${#suites[@]} -eq 0 ]; then
-            echo "::error::no offline scripts/*.test.mjs found - the guard suites are not running"
+            echo "::error::no offline scripts/**/*.test.mjs found - the guard suites are not running"
             exit 1
           fi
           echo "running ${#suites[@]} guard suite(s): ${suites[*]}"
