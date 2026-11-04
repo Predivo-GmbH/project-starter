@@ -1,0 +1,66 @@
+import { expect, test, type APIResponse } from '@playwright/test'
+import { firstAssets } from '../../scripts/check-live-headers.mjs'
+
+// SR-HDR-01: GET is what browsers send. Plesk once returned 4/4 headers on HEAD but 0/4 on GET.
+// Only visitor requests: scanner-style probes can ban the office AND build laptop's shared address.
+// Private-file denial is checked offline in scripts/lib/security-htaccess.test.mjs.
+test.describe.configure({ mode: 'serial' })
+const pause = () => new Promise(resolve => setTimeout(resolve, 1000))
+
+function headers(response: APIResponse) {
+  const h = response.headers()
+  expect.soft(h['strict-transport-security'], response.url()).toMatch(/max-age=(?:31536000|63072000);\s*includeSubDomains/i)
+  expect.soft(h['x-content-type-options'], response.url()).toBe('nosniff')
+  expect.soft(h['x-frame-options']).toBe('DENY')
+  expect.soft(h['referrer-policy']).toBe('no-referrer')
+  expect.soft(h['permissions-policy']).toContain('camera=()')
+  const csp = h['content-security-policy'] ?? ''
+  expect.soft(csp).toContain("script-src 'self'")
+  expect.soft(csp).toContain("frame-ancestors 'none'")
+  expect.soft(csp).toContain("base-uri 'none'")
+  expect.soft(csp).not.toMatch(/script-src[^;]*'unsafe-(?:inline|eval)'/)
+}
+
+test('security headers: home, JavaScript and CSS', async ({ request }) => {
+  await pause()
+  const home = await request.get('https://{{STAGING_DOMAIN}}/', { maxRedirects: 0 })
+  expect(home.status()).toBe(200)
+  headers(home)
+  const html = await home.text()
+  // Discover only same-origin assets, validating raw paths before URL can erase traversal.
+  const { script, stylesheet } = firstAssets(html, home.url())
+  expect(Boolean(script && stylesheet), 'home links a same-origin script and stylesheet').toBe(true)
+  for (const path of [script!, stylesheet!]) {
+    await pause()
+    const response = await request.get(path, { maxRedirects: 0 })
+    expect.soft(response.status(), path).toBe(200)
+    headers(response)
+    await response.body()
+  }
+})
+
+test.describe('nginx responses', () => {
+  // A new API context otherwise inherits the staging config's Basic auth credentials.
+  // Never send them over HTTP; the 401 check must really be unauthenticated.
+  test.use({
+    // A plain undefined resets to the configured value; this fixture explicitly unsets it.
+    // eslint-disable-next-line no-empty-pattern -- This fixture deliberately has no dependencies.
+    httpCredentials: [async ({}, use) => { await use(undefined) }, { scope: 'test' }],
+  })
+
+  test('security headers: nginx HTTP to HTTPS redirect', async ({ request }) => {
+    test.fixme(true, 'nginx-made response; needs the Plesk nginx directives of WEB-01 (held)')
+    await pause()
+    const response = await request.get('http://{{STAGING_DOMAIN}}/', { maxRedirects: 0 })
+    expect(response.status()).toBe(301)
+    expect(response.headers().location).toBe('https://{{STAGING_DOMAIN}}/')
+    headers(response)
+  })
+  test('security headers: unauthenticated staging response', async ({ request }) => {
+    test.fixme(true, 'nginx-made response; needs the Plesk nginx directives of WEB-01 (held)')
+    await pause()
+    const response = await request.get('https://{{STAGING_DOMAIN}}/', { maxRedirects: 0 })
+    expect(response.status()).toBe(401)
+    headers(response)
+  })
+})

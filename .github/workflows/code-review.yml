@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
 
+# SR-SUP-06: read-only by default; elevate only in the job that needs it.
+permissions:
+  contents: read
+
 jobs:
   code-review:
     # OFF BY STANDING RULE (Roger, 2026-08-29). The AI reviewers must never spend Anthropic
@@ -30,6 +34,7 @@ jobs:
     timeout-minutes: 15
     env:
       HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    # Review jobs need write access to post their PR/issue comments when explicitly armed.
     permissions:
       contents: read
       pull-requests: write
@@ -47,13 +52,13 @@ jobs:
           exit 1
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Run Code Review
         if: env.HAS_KEY == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # Post as the repo's own Actions bot. Without a token the action tries to mint

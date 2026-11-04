@@ -15,6 +15,10 @@ on:
     - cron: '0 8 * * *' # Daily at 8:00 UTC
   workflow_dispatch: # Allow manual trigger
 
+# SR-SUP-06: read-only by default; elevate only in the job that needs it.
+permissions:
+  contents: read
+
 jobs:
   ping:
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
