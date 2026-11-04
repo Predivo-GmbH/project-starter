@@ -7,7 +7,7 @@ const base = 'https://example.invalid'
 const html = '<script src="https://cdn.example.invalid/third-party.js"></script><script src="/assets/app.js"></script><link href="/assets/app.css" rel="stylesheet">'
 const healthy = {
   'strict-transport-security': 'max-age=63072000; includeSubDomains',
-  'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+  'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin',
   'permissions-policy': 'camera=(), microphone=(), payment=(), geolocation=(), usb=()',
   'content-security-policy': "default-src 'none'; script-src 'self'",
 }
@@ -29,6 +29,9 @@ function transport(overrides = {}) {
       const headers = new Headers(healthy)
       if (overrides.missing && (!overrides.onlyAsset || url.endsWith('.css'))) headers.delete(overrides.missing)
       if (overrides.hsts !== undefined) headers.set('strict-transport-security', overrides.hsts)
+      if (overrides.referrerPolicy !== undefined && (!overrides.onlyAsset || url.endsWith('.css'))) {
+        headers.set('referrer-policy', overrides.referrerPolicy)
+      }
       return {
         status: overrides.status ?? 200, headers,
         text: async () => { events.push({ event: 'body', time }); return overrides.html ?? html },
@@ -65,6 +68,16 @@ test('HSTS below one year or malformed fails; the one-year boundary passes', asy
 test('HTTP errors/redirects and missing home-page assets fail', async () => {
   assert.ok((await checkOnce({ base, ...transport({ status: 301 }) })).some(p => p.includes('HTTP 301')))
   assert.ok((await checkOnce({ base, ...transport({ html: '<title>Missing links</title>' }) })).some(p => p.includes('no same-origin')))
+})
+
+test('Referrer-Policy must be same-origin on pages and assets (SR-HDR-06)', async () => {
+  for (const referrerPolicy of ['no-referrer', 'unsafe-url', 'same-origin, no-referrer']) {
+    for (const onlyAsset of [false, true]) {
+      const problems = await checkOnce({ base, ...transport({ referrerPolicy, onlyAsset }) })
+      const paths = onlyAsset ? ['/assets/app.css'] : ['/', '/assets/app.js', '/assets/app.css']
+      assert.deepEqual(problems, paths.map(path => `${path}: Referrer-Policy must be same-origin (SR-HDR-06)`))
+    }
+  }
 })
 
 test('unsafe paths are refused BEFORE any transport call (offline strings, never requests)', async () => {

@@ -58,6 +58,9 @@ function headerProblems(response, label) {
   const hsts = response.headers.get('strict-transport-security') ?? ''
   const age = /(?:^|;)\s*max-age\s*=\s*(\d+)\s*(?=;|$)/i.exec(hsts)?.[1]
   if (!age || Number(age) < 31536000) problems.push(`${label}: HSTS max-age must be at least 31536000`)
+  if (response.headers.get('referrer-policy')?.trim() !== 'same-origin') {
+    problems.push(`${label}: Referrer-Policy must be same-origin (SR-HDR-06)`)
+  }
   return problems
 }
 
