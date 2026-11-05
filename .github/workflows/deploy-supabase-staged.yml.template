@@ -395,10 +395,18 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-      - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The free gitleaks program, not gitleaks-action: the action refuses an ORGANISATION's repos
+      # without a paid licence ("[predivo-ch] is an organization. License key is required.",
+      # predivo-ch/pull-engine run 42060259364, 05.11.2026), and new private repos live in predivo-ch.
+      # No --log-opts = every ref, full history (what the action scanned on a dispatch or schedule).
+      - name: Secret scan (gitleaks, every ref)
+        run: |
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "$RUNNER_TEMP/gitleaks.tar.gz" https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          chmod +x "$RUNNER_TEMP/gitleaks"
+          CFG=""
+          if [ -f .gitleaks.toml ]; then CFG="--config .gitleaks.toml"; fi
+          "$RUNNER_TEMP/gitleaks" git . --no-banner --redact --verbose --exit-code 1 $CFG
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
