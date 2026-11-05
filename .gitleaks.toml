@@ -13,7 +13,10 @@ regexes = [
   # GitHub Actions secret references are names, not values.
   '''\$\{\{\s*secrets\.[A-Z0-9_]+\s*\}\}''',
 ]
-paths = [
-  # Lock file: integrity hashes look like keys to the entropy rules.
-  '''package-lock\.json''',
-]
+# No path allowlist here. Lock files (package-lock.json, pnpm-lock.yaml, yarn.lock, ...) are already
+# allowlisted by gitleaks' own default config, which useDefault above merges in (gitleaks 8.24.3
+# config/gitleaks.toml; extend() appends the default's global allowlist paths). A path entry of our
+# own would only repeat it, and this repo has no lock file, so the fleet guard
+# production-monitor test/gitleaks-allowlists-name-files-that-exist.test.mjs fails any entry that
+# names no file on master. If a project made from this starter needs a path entry, add it there,
+# naming one file that exists in that project.
