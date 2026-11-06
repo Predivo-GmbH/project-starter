@@ -48,7 +48,7 @@ jobs:
           else
             mkdir -p test-results
             fixture=$(mktemp -d "$PWD/test-results/security-guards-XXXXXX")
-            cp -R scripts public e2e .github "$fixture/"
+            cp -R scripts public e2e .github .npmrc "$fixture/"
             cd "$fixture"
             npm init -y >/dev/null
             # The proven scanner guard uses the TypeScript 5 compiler API (absent in TypeScript 7).
