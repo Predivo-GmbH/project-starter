@@ -28,7 +28,7 @@
 
 | ID | Date | Decision | Why | Rejected alternative | Decided by | Status |
 |---|---|---|---|---|---|---|
-| D-001 |  |  |  |  |  | active |
+| D-001 | 2026-11-06 | New npm package versions wait at least 3 days: the starter ships `.npmrc` with `min-release-age=3` (SR-SUP-03), guarded by `scripts/lib/package-release-age.test.mjs` | npm 11.10+ applies it only when resolving NEW versions; `npm ci` installs the lockfile unchanged and npm 10 (Node 22 runners) ignores it, so nothing in CI can fail. Measured with npm 11.10.0 on 2026-11-06 | Renovate `minimumReleaseAge` / Dependabot `cooldown` (the starter has no update bot; GitHub applies a 3-day default cooldown to Dependabot version updates since 2026-07-14) | Roger (2026-11-06) | active |
 
 <!--
 Example row, delete when the first real one is added:
