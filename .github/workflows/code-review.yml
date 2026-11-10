@@ -30,7 +30,7 @@ jobs:
     if: >-
       github.event.pull_request.draft == false
       && vars.AI_REVIEW_ENABLED == 'true'
-    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     timeout-minutes: 15
     env:
       HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}

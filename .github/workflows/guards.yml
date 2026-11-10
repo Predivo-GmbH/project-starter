@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   guards:
-    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-24.04' }}
     # STANDARD: every job MUST cap its runtime (deploy-standard.md).
     timeout-minutes: 5
     steps:
