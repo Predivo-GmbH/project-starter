@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.github', 'workflows')
 const files = fs.readdirSync(dir).filter(f => /\.ya?ml(\.template)?$/.test(f))
 assert.ok(files.length > 0, 'no workflows found')
-const ok = "runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}"
+const ok = "runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-24.04' }}"
 let jobs = 0
 for (const f of files) {
   for (const line of fs.readFileSync(path.join(dir, f), 'utf8').split(/\r?\n/)) {
