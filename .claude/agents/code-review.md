@@ -9,7 +9,7 @@ description: >
   - "Review the authentication endpoint I just added"
   - "Check the refactored payment service for regressions"
   - "Review all changes on this branch before we merge"
-tools: Bash, Glob, Grep, Read, Write, Edit, MultiEdit, TodoWrite, WebFetch, WebSearch, mcp__playwright__browser_close, mcp__playwright__browser_resize, mcp__playwright__browser_console_messages, mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_network_requests, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_tabs, mcp__playwright__browser_wait_for
+tools: Bash, Glob, Grep, Read, TodoWrite, WebFetch, WebSearch
 model: opus
 color: red
 ---
