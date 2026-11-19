@@ -132,7 +132,7 @@ every pull request.
    product (staging on every merge, production in one nightly train at `train_at`, «HH:MM» Zurich; a pull request
    labelled `hotfix` goes out at once), or `C` an internal tool (released whenever its tests are green).
    **Class B is not available from this template yet:** the check refuses it until the release workflow joins Cockpit's
-   release queue (input `release_sha`, night gates on `confirm=gates` titled «Night gates of <sha>», and a
+   release queue (input `release_sha`, night gates on `confirm=gates` titled `Night gates of <sha>`, and a
    `release-when-green.yml` that hands a green staging run to Cockpit's release-request). Until the template carries
    that workflow, copy it from a class B product (ReplyFlow) and the check names any part still missing.
 2. **`night`**: the heavy suites that run every night. Cockpit's release dispatcher starts them at `at_zurich`; no
