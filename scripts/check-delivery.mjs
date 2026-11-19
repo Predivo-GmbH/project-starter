@@ -47,9 +47,9 @@ export function readWorkflow(dir, name) {
  * a comment starts at «#» at the line's start or after a space, outside a quoted scalar; a quoted scalar starts where a
  * value starts (after the indentation, «- », «: », «{», «[» or «,»), so «Don't» or «ref:"» inside plain text is text.
  */
-export function stripComment(line, state = { quote: null }) {
+export function stripComment(line, state = { quote: null }, plainContinues = false) {
   let quote = state.quote // a quoted scalar opened on an earlier line is still open (Codex round 5 on #15)
-  let valueStart = quote === null
+  let valueStart = quote === null && !plainContinues // a plain scalar's next line starts as plain text (round 6)
   let flow = 0 // depth of the flow collection ({...} / [...]) the scan is in; its punctuation only counts there
   const done = (out) => { state.quote = quote; return out }
   for (let i = 0; i < line.length; i++) {
@@ -75,24 +75,34 @@ export function stripComment(line, state = { quote: null }) {
 
 /**
  * The workflow's lines without comments (a word in a comment never counts as a trigger or an input), read over the whole
- * text (Codex round 5 on #15): a quoted value open at a line's end stays open on the next lines, and the lines of a block
- * scalar («key: |», «- run: >-», with any indicators) are literal text: kept whole while they are indented deeper than
- * its key (or blank), never cut at a «#».
+ * text (Codex rounds 5 and 6 on #15): a quoted value open at a line's end stays open on the next lines; a plain value
+ * continued on the next line goes on as plain text there; and the lines of a block scalar («key: |», «- run: >-», any
+ * indicators), indented deeper than its key, are script text: a shell comment (a «#» at the start or after a space) is
+ * dropped, so a commented-out command never counts.
  */
 function codeLines(text) {
   const out = []
   const state = { quote: null }
   let block = null // the indent a block scalar's lines must exceed, while inside one
+  let plain = null // the indent of a key whose plain value may go on over the next, deeper lines
   for (const raw of String(text).split(/\r?\n/)) {
     const lead = raw.match(/^\s*/)[0].length
     if (block !== null) {
-      if (raw.trim() === '' || lead > block) { if (raw.trim() !== '') out.push(raw); continue }
+      if (raw.trim() === '') continue
+      if (lead > block) { const script = raw.replace(/(^|\s)#.*$/, ''); if (script.trim() !== '') out.push(script); continue }
       block = null
     }
-    const line = stripComment(raw, state)
+    const t = raw.trim()
+    const continues = state.quote === null && plain !== null && lead > plain && t !== '' && !/^(- |-$|[^\s#][^:]*:(\s|$))/.test(t)
+    const line = stripComment(raw, state, continues)
     if (line.trim() !== '') out.push(line)
+    if (state.quote !== null) continue
     // a block scalar starts here: «key: |», «key: >-», «- |2», a comment after it already gone
-    if (state.quote === null && /(^|:\s+|^\s*-\s+)[|>][0-9+-]*\s*$/.test(line)) block = lead
+    if (/(^|:\s+|^\s*-\s+)[|>][0-9+-]*\s*$/.test(line)) { block = lead; plain = null; continue }
+    if (continues) continue
+    // a key with a plain value («key: some text»): its value may continue on deeper lines
+    const m = line.match(/^(\s*)(?:-\s+)?[^\s#'"][^:]*:\s+(.*)$/)
+    plain = m && m[2].trim() !== '' && !/^['"{[|>&*!]/.test(m[2].trim()) ? lead : null
   }
   return out
 }

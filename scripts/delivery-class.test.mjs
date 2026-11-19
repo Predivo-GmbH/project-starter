@@ -176,6 +176,16 @@ test('block form is read as YAML reads it: quoted keys, apostrophes, colons and 
   const run = RELEASE_WHEN_GREEN.replace('      - run: node scripts/release-when-green.mjs request', '      - run: |\n          echo "#1 then"\n          node scripts/release-when-green.mjs request')
   assert.notEqual(run, RELEASE_WHEN_GREEN, 'the fixture changed')
   assert.deepEqual(queueGaps(QUEUE_DEPLOY, fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': run })), [], 'a release-request inside a run block was missed')
+  // a shell comment in a run block is no hand-over (Codex round 6)
+  for (const commentedRun of ['          # node scripts/release-when-green.mjs request', '          echo skipped # node scripts/release-when-green.mjs request']) {
+    const shell = RELEASE_WHEN_GREEN.replace('      - run: node scripts/release-when-green.mjs request', '      - run: |\n          echo start\n' + commentedRun)
+    assert.notEqual(shell, RELEASE_WHEN_GREEN, 'the fixture changed')
+    assert.ok(queueGaps(QUEUE_DEPLOY, fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': shell })).some((e) => e.includes('release-request')), `a commented hand-over counted: ${commentedRun.trim()}`)
+  }
+  // a plain value continued on the next line: a quote there is text, the comment after it a comment (Codex round 6)
+  const continued = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", '    description: first part\n      "second # inputs.confirm == \'gates\'')
+  assert.notEqual(continued, QUEUE_DEPLOY, 'the fixture changed')
+  assert.ok(queueGaps(continued, fixture({ 'deploy.yml': continued, 'release-when-green.yml': RELEASE_WHEN_GREEN })).some((e) => e.includes('confirm=gates')), 'a quote on a plain value\'s next line opened a fake quote and kept the comment')
 })
 
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
