@@ -47,11 +47,15 @@ export function readWorkflow(dir, name) {
  * a comment starts at «#» at the line's start or after a space, outside a quoted scalar; a quoted scalar starts where a
  * value starts (after the indentation, «- », «: », «{», «[» or «,»), so «Don't» or «ref:"» inside plain text is text.
  */
-export function stripComment(line, state = { quote: null }) {
-  let quote = state.quote // a quoted scalar opened on an earlier line is still open (Codex round 5 on #15)
-  let valueStart = quote === null
+export function stripComment(line) {
+  return scanLine(line).text
+}
+
+/** The line without its comment, and whether it ends inside a quoted value that it opened (which then runs on). */
+function scanLine(line) {
+  let quote = null
+  let valueStart = true
   let flow = 0 // depth of the flow collection ({...} / [...]) the scan is in; its punctuation only counts there
-  const done = (out) => { state.quote = quote; return out }
   for (let i = 0; i < line.length; i++) {
     const ch = line[i]
     if (quote) {
@@ -60,7 +64,7 @@ export function stripComment(line, state = { quote: null }) {
       if (ch === quote) quote = null
       continue
     }
-    if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) return done(line.slice(0, i))
+    if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) return { text: line.slice(0, i), open: false }
     if (/\s/.test(ch)) continue
     if ((ch === '"' || ch === "'") && valueStart) { quote = ch; valueStart = false; continue }
     if (ch === '-' && valueStart && /\s/.test(line[i + 1] ?? ' ')) continue
@@ -70,18 +74,17 @@ export function stripComment(line, state = { quote: null }) {
     if (flow > 0 && (ch === '}' || ch === ']')) { flow--; valueStart = false; continue }
     valueStart = false
   }
-  return done(line)
+  return { text: line, open: quote !== null }
 }
 
 /**
- * The workflow's lines without comments (a word in a comment never counts as a trigger or an input), read over the whole
- * text: a quoted value open at a line's end stays open on the next lines (Codex round 5 on #15), and the lines of a block
- * scalar («key: |», «- run: >-», any indicators), indented deeper than its key, are left out: they are script text, and
- * no structural check reads scripts (since class B is refused here, Codex round 7 on #15).
+ * The workflow's lines without comments (a word in a comment never counts as a trigger or an input), one line at a time;
+ * the lines of a block scalar («key: |», «- run: >-», any indicators), indented deeper than its key, are left out: they
+ * are script text, and no structural check reads scripts. The on: block, which the checks read, may hold no value that
+ * runs over several lines (unreadableForm refuses it, Codex round 8 on #15), so no quote state spans lines.
  */
 function codeLines(text) {
   const out = []
-  const state = { quote: null }
   let block = null // the indent a block scalar's lines must exceed, while inside one
   for (const raw of String(text).split(/\r?\n/)) {
     const lead = raw.match(/^\s*/)[0].length
@@ -89,10 +92,10 @@ function codeLines(text) {
       if (raw.trim() === '' || lead > block) continue
       block = null
     }
-    const line = stripComment(raw, state)
+    const line = stripComment(raw)
     if (line.trim() !== '') out.push(line)
     // a block scalar starts here: «key: |», «key: >-», «- |2», a comment after it already gone
-    if (state.quote === null && /(^|:\s+|^\s*-\s+)[|>][0-9+-]*\s*$/.test(line)) block = lead
+    if (/(^|:\s+|^\s*-\s+)[|>][0-9+-]*\s*$/.test(line)) block = lead
   }
   return out
 }
@@ -116,6 +119,9 @@ export function unreadableForm(text) {
   if (inline) return null
   let end = lines.findIndex((l, i) => i > at && !/^\s/.test(l))
   if (end < 0) end = lines.length
+  // every line of the on: block is a key or a list item: a value that runs over several lines is refused (round 8)
+  const spill = lines.slice(at + 1, end).find((l) => scanLine(l).open || !/^\s*(-(\s|$)|(['"])[^'"]+\3\s*:(\s|$)|[A-Za-z0-9_-]+\s*:(\s|$))/.test(l))
+  if (spill) return `a value in its on: block runs over several lines («${spill.trim().slice(0, 40)}»): write each value on one line`
   const wd = lines.findIndex((l, i) => i > at && i < end && /^\s+['"]?workflow_dispatch['"]?\s*:/.test(l))
   if (wd < 0) return null
   const rest = lines[wd].replace(/^[^:]*:\s*/, '').trim()

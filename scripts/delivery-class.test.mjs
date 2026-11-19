@@ -141,9 +141,17 @@ test('block form is read as YAML reads it: quoted keys, apostrophes, colons and 
   assert.equal(unreadableForm(text), null)
   assert.equal(stripCommentForTest('branches: [main, "x # y"] # z'), 'branches: [main, "x # y"] ', 'inside a flow list a quoted # stays, the trailing comment goes')
   assert.equal(stripCommentForTest('description: For example build," # required: true'), 'description: For example build," ', 'a comma and a quote in plain text start no quoted value (round 4)')
-  // a quoted value over two lines is the value: a «required: true» inside it sets nothing (round 5)
+  // a value in the on: block that runs over several lines is refused, quoted or plain, so no continuation is ever read as
+  // an input's shape (Codex round 8)
   const across = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: "first\n          required: true"\n      other:\n        type: string\njobs: {}\n'
-  assert.deepEqual(dispatchInputsOf(across), { sha: { required: false, hasDefault: false }, other: { required: false, hasDefault: false } })
+  assert.equal(dispatchInputsOf(across), null)
+  assert.match(unreadableForm(across), /runs over several lines .*write each value on one line/)
+  const plainSpill = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: first part\n          "second # required: true\njobs: {}\n'
+  assert.match(unreadableForm(plainSpill), /runs over several lines/)
+  const shaped = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: "first\n      other: {required: true}"\njobs: {}\n'
+  assert.match(unreadableForm(shaped), /runs over several lines|settings on one line/)
+  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'night.yml': across })
+  assert.ok(checkDelivery({ ...C_DECL, night: [{ workflow: 'night.yml', at_zurich: '02:00', inputs: {} }] }, dir).some((e) => /^night\.yml: .*one line/.test(e)))
   // a run: | block is script text, left out of every structural check (round 7)
   const scripted = 'on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - run: |\n          echo "#1"\n          schedule:\n          workflow_dispatch:\n'
   assert.deepEqual([...triggersOf(scripted)], ['pull_request'])
