@@ -49,19 +49,69 @@ function codeLines(text) {
 
 const unquote = (s) => s.trim().replace(/^(['"])(.*)\1$/, '$2')
 
+/**
+ * A ONE-LINE YAML FLOW MAPPING «{a: 1, b: "x, y", c: [d, {e: 2}]}», read by YAML's rules (review of #15, 19.11.2026:
+ * regexes took a quote inside a plain scalar, «Don't» or «ref:"», for a quoted one): a quoted scalar starts with its
+ * quote ('' and \" escapes); a plain scalar runs to the next «,» or «}» of its mapping, since flow indicators end it; a
+ * nested {...} or [...] is skipped whole, quotes inside it respected. Returns key -> raw value (quoted values unquoted),
+ * top level only; null when the text is not one complete flow mapping.
+ */
+export function flowPairs(inline) {
+  const t = String(inline).trim()
+  if (!t.startsWith('{')) return null
+  const out = new Map()
+  let i = 1
+  const space = () => { while (i < t.length && /\s/.test(t[i])) i++ }
+  const quoted = () => { // t[i] is the opening quote
+    const q = t[i++]
+    let v = ''
+    while (i < t.length) {
+      if (q === "'" && t[i] === "'" && t[i + 1] === "'") { v += "'"; i += 2; continue }
+      if (q === '"' && t[i] === '\\') { v += t[i + 1] ?? ''; i += 2; continue }
+      if (t[i] === q) { i++; return v }
+      v += t[i++]
+    }
+    return null // unterminated
+  }
+  const nested = () => { // t[i] is { or [: skip to its match
+    let depth = 0
+    const start = i
+    while (i < t.length) {
+      const ch = t[i]
+      if (ch === '"' || ch === "'") { if (quoted() === null) return null; continue }
+      if (ch === '{' || ch === '[') depth++
+      if (ch === '}' || ch === ']') { depth--; if (depth === 0) { i++; return t.slice(start, i) } }
+      i++
+    }
+    return null
+  }
+  const plain = (stops) => { const start = i; while (i < t.length && !stops.test(t[i])) i++; return t.slice(start, i).trim() }
+  for (;;) {
+    space()
+    if (t[i] === '}') return i + 1 === t.length || /^\s*$/.test(t.slice(i + 1)) ? out : null
+    let key
+    if (t[i] === '"' || t[i] === "'") { key = quoted(); if (key === null) return null }
+    else { const start = i; while (i < t.length && !(t[i] === ':' && /[\s,}]/.test(t[i + 1] ?? ' ')) && !/[,}]/.test(t[i])) i++; key = t.slice(start, i).trim() }
+    space()
+    let value = ''
+    if (t[i] === ':') {
+      i++
+      space()
+      if (t[i] === '"' || t[i] === "'") { value = quoted(); if (value === null) return null }
+      else if (t[i] === '{' || t[i] === '[') { value = nested(); if (value === null) return null }
+      else value = plain(/[,}]/)
+    }
+    if (key !== '') out.set(key, value)
+    space()
+    if (t[i] === ',') { i++; continue }
+    if (t[i] === '}') continue
+    return null
+  }
+}
+
 /** The keys of a one-line flow mapping «{a: 1, b: [x, {c: 2}]}» at its top level. */
 function flowKeys(inline) {
-  const keys = []
-  let depth = 0
-  let token = ''
-  for (const ch of inline) {
-    if (ch === '{' || ch === '[') { depth++; if (depth === 1) { token = ''; continue } }
-    if (ch === '}' || ch === ']') depth--
-    if (depth === 1 && ch === ',') { token = ''; continue }
-    if (depth === 1 && ch === ':' && token.trim()) { keys.push(unquote(token)); token = '\u0000'; continue }
-    if (depth === 1 && token !== '\u0000') token += ch
-  }
-  return keys
+  return [...(flowPairs(inline) ?? new Map()).keys()]
 }
 
 /**
@@ -132,10 +182,10 @@ export function dispatchInputsOf(text) {
         current = m ? m[2] : null
         if (current) {
           // «sha: {type: string, required: true}»: the input's settings on its own line (review round 2, 19.11.2026)
-          // quoted text never counts: «{description: "x, required: true", type: string}» is not required (review round 3);
-          // a quote counts only where a scalar starts (after «{», «,» or «:»), so «Don't» in a plain scalar is text (Codex on #15)
-          const inline = m[3].trim().startsWith('{') ? m[3].replace(/([{,:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^']|'')*')/g, '$1""') : ''
-          inputs[current] = { required: /[{,]\s*required\s*:\s*true\b/.test(inline), hasDefault: /[{,]\s*default\s*:/.test(inline) }
+          // «sha: {description: Don't skip, required: true}»: the input's settings on its own line, read by flowPairs
+          // (quoted text never counts: «{description: "x, required: true"}» is not required)
+          const pairs = m[3].trim().startsWith('{') ? flowPairs(m[3]) ?? new Map() : new Map()
+          inputs[current] = { required: pairs.get('required') === 'true', hasDefault: pairs.has('default') }
         }
       } else if (current) {
         if (/^required\s*:\s*true\b/.test(t)) inputs[current].required = true

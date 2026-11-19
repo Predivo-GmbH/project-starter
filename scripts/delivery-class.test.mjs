@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, pilotFields } from './check-delivery.mjs'
+import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, flowPairs, pilotFields } from './check-delivery.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workflows = path.join(root, '.github', 'workflows')
@@ -140,6 +140,23 @@ test('a quoted inputs key is read, and quoted text inside an inline input never 
   // an apostrophe inside a plain scalar is text, not a quote (Codex on #15)
   const plain = "on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: Don't skip this input, required: true, type: 'string'}\n      mode: {description: it's fast, default: fast}\njobs: {}\n"
   assert.deepEqual(dispatchInputsOf(plain), { sha: { required: true, hasDefault: false }, mode: { required: false, hasDefault: true } })
+  // a colon and a quote inside a plain scalar are text too (Codex round 2 on #15)
+  const colon = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: Prefix is ref:", required: true, type: "string"}\njobs: {}\n'
+  assert.deepEqual(dispatchInputsOf(colon), { sha: { required: true, hasDefault: false } })
+})
+
+test('flowPairs reads a one-line YAML flow mapping by its rules', () => {
+  const m = (s) => Object.fromEntries(flowPairs(s) ?? [])
+  assert.deepEqual(m('{a: 1, b: two words}'), { a: '1', b: 'two words' })
+  assert.deepEqual(m('{description: "x, required: true", type: string}'), { description: 'x, required: true', type: 'string' })
+  assert.deepEqual(m("{note: 'it''s', required: true}"), { note: "it's", required: 'true' })
+  assert.deepEqual(m('{description: Don\'t skip, required: true}'), { description: "Don't skip", required: 'true' })
+  assert.deepEqual(m('{description: Prefix is ref:", required: true}'), { description: 'Prefix is ref:"', required: 'true' })
+  assert.deepEqual(m('{schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}'), { schedule: '[{cron: "0 2 * * *"}]', workflow_dispatch: '{}' })
+  assert.deepEqual(m('{url: http://x.example:8080/a, b: 1}'), { url: 'http://x.example:8080/a', b: '1' })
+  assert.equal(flowPairs('{a: "unterminated}'), null)
+  assert.equal(flowPairs('a: 1'), null)
+  assert.deepEqual(m('{}'), {})
 })
 
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
