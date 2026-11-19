@@ -42,93 +42,102 @@ export function readWorkflow(dir, name) {
   return null
 }
 
+/**
+ * One line without its comment, as YAML defines one (review of #15, 19.11.2026: a «#» inside a quoted value was cut):
+ * a comment starts at «#» at the line's start or after a space, outside a quoted scalar; a quoted scalar starts where a
+ * value starts (after the indentation, «- », «: », «{», «[» or «,»), so «Don't» or «ref:"» inside plain text is text.
+ */
+function stripComment(line) {
+  let quote = null
+  let valueStart = true
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (quote) {
+      if (quote === "'" && ch === "'" && line[i + 1] === "'") { i++; continue }
+      if (quote === '"' && ch === '\\') { i++; continue }
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i)
+    if (/\s/.test(ch)) continue
+    if ((ch === '"' || ch === "'") && valueStart) { quote = ch; valueStart = false; continue }
+    if (ch === '-' && valueStart && /\s/.test(line[i + 1] ?? ' ')) continue
+    if (ch === ':' && /\s/.test(line[i + 1] ?? ' ')) { valueStart = true; continue }
+    if (ch === '{' || ch === '[' || ch === ',') { valueStart = true; continue }
+    valueStart = false
+  }
+  return line
+}
+
 /** The workflow's lines without comments (a word in a comment never counts as a trigger or an input). */
 function codeLines(text) {
-  return text.split(/\r?\n/).map((l) => l.replace(/(^|\s)#.*$/, '')).filter((l) => l.trim() !== '')
+  return text.split(/\r?\n/).map(stripComment).filter((l) => l.trim() !== '')
 }
 
 const unquote = (s) => s.trim().replace(/^(['"])(.*)\1$/, '$2')
+const onLine = (lines) => lines.findIndex((l) => /^(on|'on'|"on")\s*:/.test(l))
 
 /**
- * A ONE-LINE YAML FLOW MAPPING «{a: 1, b: "x, y", c: [d, {e: 2}]}», read by YAML's rules (review of #15, 19.11.2026:
- * regexes took a quote inside a plain scalar, «Don't» or «ref:"», for a quoted one): a quoted scalar starts with its
- * quote ('' and \" escapes); a plain scalar runs to the next «,» or «}» of its mapping, since flow indicators end it; a
- * nested {...} or [...] is skipped whole, quotes inside it respected. Returns key -> raw value (quoted values unquoted),
- * top level only; null when the text is not one complete flow mapping.
+ * WHY THIS CHECK CANNOT READ A WORKFLOW, or null. It reads block form only (review of #15, 19.11.2026: three rounds of
+ * findings came from reading every YAML shape; a guard that refuses what it cannot read cannot be fooled by it): a flow
+ * «on: {...}», a workflow_dispatch written on one line with content, and an input whose settings sit inline
+ * («sha: {required: true}») are refused, so the project writes them in block form. «on: push», «on: [push, ...]» and
+ * a block list «on:\n  - push» carry no inputs and are read.
  */
-export function flowPairs(inline) {
-  const t = String(inline).trim()
-  if (!t.startsWith('{')) return null
-  const out = new Map()
-  let i = 1
-  const space = () => { while (i < t.length && /\s/.test(t[i])) i++ }
-  const quoted = () => { // t[i] is the opening quote
-    const q = t[i++]
-    let v = ''
-    while (i < t.length) {
-      if (q === "'" && t[i] === "'" && t[i + 1] === "'") { v += "'"; i += 2; continue }
-      if (q === '"' && t[i] === '\\') { v += t[i + 1] ?? ''; i += 2; continue }
-      if (t[i] === q) { i++; return v }
-      v += t[i++]
+export function unreadableForm(text) {
+  const lines = codeLines(text ?? '')
+  const at = onLine(lines)
+  if (at < 0) return null
+  const inline = lines[at].replace(/^[^:]*:\s*/, '').trim()
+  if (inline.startsWith('{')) return 'its on: is a flow mapping ({...})'
+  if (inline) return null
+  let end = lines.findIndex((l, i) => i > at && !/^\s/.test(l))
+  if (end < 0) end = lines.length
+  const wd = lines.findIndex((l, i) => i > at && i < end && /^\s+['"]?workflow_dispatch['"]?\s*:/.test(l))
+  if (wd < 0) return null
+  const rest = lines[wd].replace(/^[^:]*:\s*/, '').trim()
+  if (rest && !/^(\{\s*\}|~|null)$/.test(rest)) return 'its workflow_dispatch is written on one line'
+  const wdLead = lines[wd].match(/^\s*/)[0].length
+  let inInputs = false
+  let inLead = null
+  for (const l of lines.slice(wd + 1)) {
+    const lead = l.match(/^\s*/)[0].length
+    if (lead <= wdLead) break
+    const t = l.trim()
+    if (!inInputs) {
+      const m = t.match(/^(['"]?)inputs\1\s*:\s*(.*)$/)
+      if (m && m[2] && !/^(\{\s*\}|~|null)$/.test(m[2])) return 'its workflow_dispatch inputs are written on one line'
+      if (m) inInputs = true
+      continue
     }
-    return null // unterminated
-  }
-  const nested = () => { // t[i] is { or [: skip to its match
-    let depth = 0
-    const start = i
-    while (i < t.length) {
-      const ch = t[i]
-      if (ch === '"' || ch === "'") { if (quoted() === null) return null; continue }
-      if (ch === '{' || ch === '[') depth++
-      if (ch === '}' || ch === ']') { depth--; if (depth === 0) { i++; return t.slice(start, i) } }
-      i++
+    if (inLead === null) inLead = lead
+    if (lead < inLead) break
+    if (lead === inLead) {
+      const m = t.match(/^(['"]?)([A-Za-z0-9_-]+)\1\s*:\s*(.*)$/)
+      if (m && m[3].trim() !== '') return `its workflow_dispatch input «${m[2]}» has its settings on one line`
     }
-    return null
   }
-  const plain = (stops) => { const start = i; while (i < t.length && !stops.test(t[i])) i++; return t.slice(start, i).trim() }
-  for (;;) {
-    space()
-    if (t[i] === '}') return i + 1 === t.length || /^\s*$/.test(t.slice(i + 1)) ? out : null
-    let key
-    if (t[i] === '"' || t[i] === "'") { key = quoted(); if (key === null) return null }
-    else { const start = i; while (i < t.length && !(t[i] === ':' && /[\s,}]/.test(t[i + 1] ?? ' ')) && !/[,}]/.test(t[i])) i++; key = t.slice(start, i).trim() }
-    space()
-    let value = ''
-    if (t[i] === ':') {
-      i++
-      space()
-      if (t[i] === '"' || t[i] === "'") { value = quoted(); if (value === null) return null }
-      else if (t[i] === '{' || t[i] === '[') { value = nested(); if (value === null) return null }
-      else value = plain(/[,}]/)
-    }
-    if (key !== '') out.set(key, value)
-    space()
-    if (t[i] === ',') { i++; continue }
-    if (t[i] === '}') continue
-    return null
-  }
+  return null
 }
 
-/** The keys of a one-line flow mapping «{a: 1, b: [x, {c: 2}]}» at its top level. */
-function flowKeys(inline) {
-  return [...(flowPairs(inline) ?? new Map()).keys()]
+/** The workflow files of a folder this check cannot read, with the reason. */
+export function unreadableWorkflows(workflowsDir) {
+  const files = fs.existsSync(workflowsDir) ? fs.readdirSync(workflowsDir).filter((x) => /\.ya?ml(\.template)?$/.test(x)) : []
+  return files.map((x) => [x, unreadableForm(fs.readFileSync(path.join(workflowsDir, x), 'utf8'))]).filter(([, why]) => why)
 }
 
 /**
  * The keys directly under the top-level `on:` (push, pull_request, schedule, workflow_dispatch, ...), in block form,
- * as a list «on: [push, "pull_request"]», a block list «on:\n  - push», a single event «on: push», or a flow mapping
- * «on: {schedule: [...]}».
+ * as a list «on: [push, "pull_request"]», a block list «on:\n  - push», or a single event «on: push». A flow mapping
+ * «on: {...}» gives none: unreadableForm refuses it, so checkDelivery says so.
  */
 export function triggersOf(text) {
   const lines = codeLines(text)
   const out = new Set()
-  const at = lines.findIndex((l) => /^(on|'on'|"on")\s*:/.test(l))
+  const at = onLine(lines)
   if (at < 0) return out
   const inline = lines[at].replace(/^[^:]*:\s*/, '').trim()
-  if (inline.startsWith('{')) {
-    for (const k of flowKeys(inline)) out.add(k)
-    return out
-  }
+  if (inline.startsWith('{')) return out
   if (inline) {
     for (const t of inline.replace(/[[\]]/g, '').split(',')) if (unquote(t)) out.add(unquote(t))
     return out
@@ -146,15 +155,15 @@ export function triggersOf(text) {
 }
 
 /**
- * The workflow_dispatch inputs a workflow declares, by name: { required, hasDefault }. null when the workflow has no
- * workflow_dispatch in block form under `on:` that this reader can follow (then nothing can be checked).
+ * The workflow_dispatch inputs a workflow declares, by name: { required, hasDefault }, read from block form. null when
+ * the workflow cannot be read (unreadableForm) or has no workflow_dispatch; {} when it takes no inputs.
  */
 export function dispatchInputsOf(text) {
+  if (unreadableForm(text)) return null
   const lines = codeLines(text)
-  const at = lines.findIndex((l) => /^(on|'on'|"on")\s*:/.test(l))
+  const at = onLine(lines)
   if (at < 0) return null
   const inline = lines[at].replace(/^[^:]*:\s*/, '').trim()
-  if (inline.startsWith('{')) return null // a flow mapping: not followed here
   if (inline) return triggersOf(text).has('workflow_dispatch') ? {} : null // «on: [push, workflow_dispatch]»: no inputs
   let end = lines.findIndex((l, i) => i > at && !/^\s/.test(l))
   if (end < 0) end = lines.length
@@ -162,35 +171,23 @@ export function dispatchInputsOf(text) {
   if (wd < 0) return triggersOf(text).has('workflow_dispatch') ? {} : null // «on:\n  - workflow_dispatch»: no inputs
   const wdLead = lines[wd].match(/^\s*/)[0].length
   const inputs = {}
-  const rest = lines[wd].replace(/^[^:]*:\s*/, '').trim()
-  if (/^(\{\s*\}|~|null)$/.test(rest)) return inputs // workflow_dispatch: {} - it takes no inputs
-  if (rest) return null // a flow mapping on one line: not followed here
-  {
-    // workflow_dispatch: followed by a block: read its `inputs:` block
-    let inLead = null
-    let current = null
-    let inInputs = false
-    for (const l of lines.slice(wd + 1)) {
-      const lead = l.match(/^\s*/)[0].length
-      if (lead <= wdLead) break
-      const t = l.trim()
-      if (!inInputs) { if (/^(['"]?)inputs\1\s*:\s*$/.test(t)) inInputs = true; continue } // «inputs:», «"inputs":»
-      if (inLead === null) inLead = lead
-      if (lead < inLead) break
-      if (lead === inLead) {
-        const m = t.match(/^(['"]?)([A-Za-z0-9_-]+)\1\s*:\s*(.*)$/)
-        current = m ? m[2] : null
-        if (current) {
-          // «sha: {type: string, required: true}»: the input's settings on its own line (review round 2, 19.11.2026)
-          // «sha: {description: Don't skip, required: true}»: the input's settings on its own line, read by flowPairs
-          // (quoted text never counts: «{description: "x, required: true"}» is not required)
-          const pairs = m[3].trim().startsWith('{') ? flowPairs(m[3]) ?? new Map() : new Map()
-          inputs[current] = { required: pairs.get('required') === 'true', hasDefault: pairs.has('default') }
-        }
-      } else if (current) {
-        if (/^required\s*:\s*true\b/.test(t)) inputs[current].required = true
-        if (/^default\s*:/.test(t)) inputs[current].hasDefault = true
-      }
+  let inLead = null
+  let current = null
+  let inInputs = false
+  for (const l of lines.slice(wd + 1)) {
+    const lead = l.match(/^\s*/)[0].length
+    if (lead <= wdLead) break
+    const t = l.trim()
+    if (!inInputs) { if (/^(['"]?)inputs\1\s*:/.test(t)) inInputs = true; continue } // «inputs:», «"inputs":»
+    if (inLead === null) inLead = lead
+    if (lead < inLead) break
+    if (lead === inLead) {
+      const m = t.match(/^(['"]?)([A-Za-z0-9_-]+)\1\s*:/)
+      current = m ? m[2] : null
+      if (current) inputs[current] = { required: false, hasDefault: false }
+    } else if (current) {
+      if (/^required\s*:\s*(true|'true'|"true")\s*$/.test(t)) inputs[current].required = true
+      if (/^default\s*:/.test(t)) inputs[current].hasDefault = true
     }
   }
   return inputs
@@ -300,6 +297,7 @@ export function checkDelivery(decl, workflowsDir) {
     if (n.label !== undefined && (typeof n.label !== 'string' || n.label.length < 1 || n.label.length > 200)) errors.push(`${where}.label must be 1-200 characters`)
   })
 
+  for (const [f, why] of unreadableWorkflows(workflowsDir)) errors.push(`${f}: ${why}; this check reads block form only, so write it in block form`)
   for (const f of heavyScheduled(workflowsDir)) errors.push(`${f} starts on GitHub's schedule: put it on the night list (night) and take the schedule out`)
   for (const f of prWithoutCancel(workflowsDir)) errors.push(`${f} runs on pull requests but does not stop the runs of a replaced version (concurrency grouped by the pull request, cancel-in-progress on pull_request)`)
 

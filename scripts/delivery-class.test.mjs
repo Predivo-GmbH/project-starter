@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, flowPairs, pilotFields } from './check-delivery.mjs'
+import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, unreadableForm, pilotFields } from './check-delivery.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workflows = path.join(root, '.github', 'workflows')
@@ -125,38 +125,41 @@ test('release_sha and confirm count only as inputs under workflow_dispatch, neve
   assert.deepEqual(queueGaps(QUEUE_DEPLOY, dir), [])
 })
 
-test('dispatchInputsOf reads an input whose settings sit on its own line (review round 2)', () => {
-  const text = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {type: string, required: true}\n      mode: {type: string, default: fast}\n      note:\n        type: string\n        required: true\njobs: {}\n'
-  assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, mode: { required: false, hasDefault: true }, note: { required: true, hasDefault: false } })
+test('an input whose settings sit on one line, or a flow on:, is refused with «write it in block form», never guessed (review of #15)', () => {
+  const inline = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {type: string, required: true}\njobs: {}\n'
+  assert.equal(dispatchInputsOf(inline), null)
+  assert.match(unreadableForm(inline), /input «sha» has its settings on one line/)
+  assert.match(unreadableForm('on:\n  workflow_dispatch: {inputs: {sha: {required: true}}}\njobs: {}\n'), /workflow_dispatch is written on one line/)
+  assert.match(unreadableForm('on:\n  workflow_dispatch:\n    inputs: {sha: {required: true}}\njobs: {}\n'), /inputs are written on one line/)
+  assert.match(unreadableForm('on: {pull_request: {}, push: {}}\njobs: {}\n'), /flow mapping/)
+  assert.equal(unreadableForm('on:\n  workflow_dispatch: {}\n  push:\n    branches: [main]\njobs: {}\n'), null, 'an empty workflow_dispatch is block form')
+  assert.equal(unreadableForm('on: [push, workflow_dispatch]\njobs: {}\n'), null)
+  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'night.yml': inline, 'pr.yml': 'on: {pull_request: {}}\njobs: {}\n' })
+  const errs = checkDelivery({ ...C_DECL, night: [{ workflow: 'night.yml', at_zurich: '02:00', inputs: { sha: 'x' } }] }, dir)
+  assert.ok(errs.some((e) => /^night\.yml: .*write it in block form/.test(e)), errs.join('\n'))
+  assert.ok(errs.some((e) => /^pr\.yml: its on: is a flow mapping .*write it in block form/.test(e)), errs.join('\n'))
 })
 
-test('a quoted inputs key is read, and quoted text inside an inline input never counts (review round 3)', () => {
+test('block form is read as YAML reads it: quoted keys, apostrophes, colons and quotes inside text, a quoted #, comments (review of #15)', () => {
   const quoted = 'on:\n  workflow_dispatch:\n    "inputs":\n      release_sha:\n        type: string\n      confirm:\n        type: string\njobs: {}\n'
   assert.deepEqual(Object.keys(dispatchInputsOf(quoted)), ['release_sha', 'confirm'])
-  const single = "on:\n  workflow_dispatch:\n    'inputs':\n      sha: {type: string}\njobs: {}\n"
-  assert.deepEqual(Object.keys(dispatchInputsOf(single)), ['sha'])
-  const described = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: "leave empty, required: true is not set", type: string}\n      when: {description: \'say default: now\', type: string}\njobs: {}\n'
-  assert.deepEqual(dispatchInputsOf(described), { sha: { required: false, hasDefault: false }, when: { required: false, hasDefault: false } })
-  // an apostrophe inside a plain scalar is text, not a quote (Codex on #15)
-  const plain = "on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: Don't skip this input, required: true, type: 'string'}\n      mode: {description: it's fast, default: fast}\njobs: {}\n"
-  assert.deepEqual(dispatchInputsOf(plain), { sha: { required: true, hasDefault: false }, mode: { required: false, hasDefault: true } })
-  // a colon and a quote inside a plain scalar are text too (Codex round 2 on #15)
-  const colon = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: Prefix is ref:", required: true, type: "string"}\njobs: {}\n'
-  assert.deepEqual(dispatchInputsOf(colon), { sha: { required: true, hasDefault: false } })
-})
-
-test('flowPairs reads a one-line YAML flow mapping by its rules', () => {
-  const m = (s) => Object.fromEntries(flowPairs(s) ?? [])
-  assert.deepEqual(m('{a: 1, b: two words}'), { a: '1', b: 'two words' })
-  assert.deepEqual(m('{description: "x, required: true", type: string}'), { description: 'x, required: true', type: 'string' })
-  assert.deepEqual(m("{note: 'it''s', required: true}"), { note: "it's", required: 'true' })
-  assert.deepEqual(m('{description: Don\'t skip, required: true}'), { description: "Don't skip", required: 'true' })
-  assert.deepEqual(m('{description: Prefix is ref:", required: true}'), { description: 'Prefix is ref:"', required: 'true' })
-  assert.deepEqual(m('{schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}'), { schedule: '[{cron: "0 2 * * *"}]', workflow_dispatch: '{}' })
-  assert.deepEqual(m('{url: http://x.example:8080/a, b: 1}'), { url: 'http://x.example:8080/a', b: '1' })
-  assert.equal(flowPairs('{a: "unterminated}'), null)
-  assert.equal(flowPairs('a: 1'), null)
-  assert.deepEqual(m('{}'), {})
+  const text = [
+    'on:',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      sha:',
+    "        description: Don't skip this, the prefix is ref:\"",
+    '        required: true # needed',
+    '      tag:',
+    '        description: "Use #tag, required: true is not set"',
+    "        default: '#1'",
+    '      note:',
+    '        description: say # required: true',
+    'jobs: {}',
+    '',
+  ].join('\n')
+  assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, tag: { required: false, hasDefault: true }, note: { required: false, hasDefault: false } })
+  assert.equal(unreadableForm(text), null)
 })
 
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
@@ -221,7 +224,8 @@ test('triggersOf reads block, list and single forms of on:', () => {
   assert.deepEqual([...triggersOf('on: [push, pull_request]\n')], ['push', 'pull_request'])
   assert.deepEqual([...triggersOf('on: workflow_dispatch\n')], ['workflow_dispatch'])
   assert.deepEqual([...triggersOf('on: ["pull_request", \'push\']\n')], ['pull_request', 'push'])
-  assert.deepEqual([...triggersOf('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n')], ['schedule', 'workflow_dispatch'])
+  assert.deepEqual([...triggersOf('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n')], [], 'a flow on: is not guessed')
+  assert.match(unreadableForm('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n'), /flow mapping/)
   assert.deepEqual([...triggersOf('on:\n  "pull_request":\n  \'schedule\':\n    - cron: "0 2 * * *"\n')], ['pull_request', 'schedule'])
   assert.deepEqual([...triggersOf('on:\n  - push\n  - "pull_request"\njobs: {}\n')], ['push', 'pull_request'], 'a block list (review round 2)')
   assert.deepEqual([...triggersOf('on:\n- push\n- workflow_dispatch\njobs: {}\n')], ['push', 'workflow_dispatch'], 'a block list at the key\'s indent')
