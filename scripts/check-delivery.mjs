@@ -82,7 +82,7 @@ export function queueGaps(deployText, workflowsDir) {
   const files = fs.existsSync(workflowsDir) ? fs.readdirSync(workflowsDir).filter((f) => /\.ya?ml(\.template)?$/.test(f)) : []
   const hands = files.some((f) => {
     const t = codeLines(fs.readFileSync(path.join(workflowsDir, f), 'utf8')).join('\n')
-    return /release-when-green\.mjs\s+request/.test(t) && /id-token:\s*write/.test(t) && /pull-requests:\s*read/.test(t)
+    return /release-when-green\.mjs\s+request/.test(t) && /id-token:\s*write/.test(t) && /pull-requests:\s*(read|write)\b/.test(t)
   })
   if (!hands) gaps.push('no workflow hands a green staging run to Cockpit\'s release-request (release-when-green.yml: `node scripts/release-when-green.mjs request`, id-token: write, pull-requests: read for the hotfix label)')
   return gaps

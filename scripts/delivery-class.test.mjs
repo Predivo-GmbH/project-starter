@@ -2,7 +2,7 @@
 // Roger, 17.11.2026: «in the future there will be even more projects» - a new project joins by declaring its class and
 // its path-to-suite map (.github/delivery.json), nothing else. scripts/check-delivery.mjs refuses a declaration the
 // project's workflows cannot carry out; these tests pin each refusal and prove this template's own declaration holds.
-import { test } from 'node:test'
+import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -14,9 +14,12 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workflows = path.join(root, '.github', 'workflows')
 const declared = () => JSON.parse(fs.readFileSync(path.join(root, '.github', 'delivery.json'), 'utf8'))
 
-/** A throw-away .github/workflows folder with the given files. */
+/** A throw-away .github/workflows folder with the given files (removed when the suite ends). */
+const made = []
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }) })
 function fixture(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delivery-'))
+  made.push(dir)
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text)
   return dir
 }
