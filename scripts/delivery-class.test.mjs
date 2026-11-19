@@ -130,13 +130,23 @@ test('the release workflow must exist', () => {
 })
 
 test('a night entry must name a workflow Cockpit can start, at «HH:MM», with plain inputs', () => {
-  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'nightly.yml': 'on:\n  workflow_run:\n    workflows: [x]\njobs: {}\n', 'ok.yml': 'on:\n  workflow_dispatch: {}\njobs: {}\n' })
+  const withInputs = 'on:\n  workflow_dispatch:\n    inputs:\n      confirm:\n        required: true\n        type: string\n      runner:\n        default: self-hosted\n        required: true\n      note:\n        type: string\njobs: {}\n'
+  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'nightly.yml': 'on:\n  workflow_run:\n    workflows: [x]\njobs: {}\n', 'ok.yml': withInputs, 'bare.yml': 'on:\n  workflow_dispatch: {}\njobs: {}\n' })
   const errs = (night) => checkDelivery({ ...C_DECL, night }, dir)
   assert.ok(errs([{ workflow: 'missing.yml', at_zurich: '01:30', inputs: {} }]).some((e) => e.includes('missing.yml is not in')))
   assert.ok(errs([{ workflow: 'nightly.yml', at_zurich: '01:30', inputs: {} }]).some((e) => e.includes('no workflow_dispatch')))
-  assert.ok(errs([{ workflow: 'ok.yml', at_zurich: '1:30', inputs: {} }]).some((e) => e.includes('at_zurich')))
-  assert.ok(errs([{ workflow: 'ok.yml', at_zurich: '01:30', inputs: { runner: 1 } }]).some((e) => e.includes('inputs')))
+  assert.ok(errs([{ workflow: 'ok.yml', at_zurich: '1:30', inputs: { confirm: 'gates' } }]).some((e) => e.includes('at_zurich')))
+  assert.ok(errs([{ workflow: 'ok.yml', at_zurich: '01:30', inputs: { confirm: 1 } }]).some((e) => e.includes('inputs must be')))
   assert.deepEqual(errs([{ workflow: 'ok.yml', at_zurich: '01:30', inputs: { confirm: 'gates' }, label: 'Night suite' }]), [])
+  assert.deepEqual(errs([{ workflow: 'bare.yml', at_zurich: '01:30', inputs: {} }]), [])
+})
+
+test('a night entry gives exactly the inputs its workflow takes, or GitHub refuses the dispatch', () => {
+  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'bare.yml': 'on:\n  workflow_dispatch: {}\njobs: {}\n', 'gated.yml': 'on:\n  workflow_dispatch:\n    inputs:\n      confirm:\n        required: true\njobs: {}\n' })
+  const errs = (night) => checkDelivery({ ...C_DECL, night }, dir)
+  assert.ok(errs([{ workflow: 'bare.yml', at_zurich: '01:30', inputs: { confirm: 'gates' } }]).some((e) => e.includes('declares no workflow_dispatch input «confirm»')))
+  assert.ok(errs([{ workflow: 'gated.yml', at_zurich: '01:30', inputs: {} }]).some((e) => e.includes('requires the input «confirm»')))
+  assert.deepEqual(errs([{ workflow: 'gated.yml', at_zurich: '01:30', inputs: { confirm: 'gates' } }]), [])
 })
 
 test('a heavy workflow on GitHub\'s schedule is refused; a light keep-alive may keep it', () => {
@@ -154,14 +164,19 @@ test('a pull-request workflow that does not cancel a replaced version is refused
   const oneGroupForAll = 'on:\n  pull_request:\nconcurrency:\n  group: reviews\n  cancel-in-progress: true\njobs: {}\n'
   const prOnly = "on:\n  push:\n  pull_request:\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\njobs: {}\n"
   const byNumber = 'on: [pull_request]\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true\njobs: {}\n'
-  const dir = fixture({ 'a.yml': none, 'b.yml': neverCancels, 'c.yml': oneGroupForAll, 'd.yml': prOnly, 'e.yml': byNumber })
-  assert.deepEqual(prWithoutCancel(dir).sort(), ['a.yml', 'b.yml', 'c.yml'])
+  const perCommit = 'on:\n  pull_request:\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}\n  cancel-in-progress: true\njobs: {}\n'
+  const quotedList = 'on: ["pull_request"]\njobs: {}\n'
+  const dir = fixture({ 'a.yml': none, 'b.yml': neverCancels, 'c.yml': oneGroupForAll, 'd.yml': prOnly, 'e.yml': byNumber, 'f.yml': perCommit, 'g.yml': quotedList })
+  assert.deepEqual(prWithoutCancel(dir).sort(), ['a.yml', 'b.yml', 'c.yml', 'f.yml', 'g.yml'])
 })
 
 test('triggersOf reads block, list and single forms of on:', () => {
   assert.deepEqual([...triggersOf('on:\n  push:\n    branches: [main]\n  pull_request:\njobs: {}\n')], ['push', 'pull_request'])
   assert.deepEqual([...triggersOf('on: [push, pull_request]\n')], ['push', 'pull_request'])
   assert.deepEqual([...triggersOf('on: workflow_dispatch\n')], ['workflow_dispatch'])
+  assert.deepEqual([...triggersOf('on: ["pull_request", \'push\']\n')], ['pull_request', 'push'])
+  assert.deepEqual([...triggersOf('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n')], ['schedule', 'workflow_dispatch'])
+  assert.deepEqual([...triggersOf('on:\n  "pull_request":\n  \'schedule\':\n    - cron: "0 2 * * *"\n')], ['pull_request', 'schedule'])
 })
 
 test('the suites map stays null until step 4 defines it', () => {

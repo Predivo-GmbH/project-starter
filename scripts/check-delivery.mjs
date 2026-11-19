@@ -47,16 +47,39 @@ function codeLines(text) {
   return text.split(/\r?\n/).map((l) => l.replace(/(^|\s)#.*$/, '')).filter((l) => l.trim() !== '')
 }
 
-/** The keys directly under the top-level `on:` block (push, pull_request, schedule, workflow_dispatch, ...). */
+const unquote = (s) => s.trim().replace(/^(['"])(.*)\1$/, '$2')
+
+/** The keys of a one-line flow mapping «{a: 1, b: [x, {c: 2}]}» at its top level. */
+function flowKeys(inline) {
+  const keys = []
+  let depth = 0
+  let token = ''
+  for (const ch of inline) {
+    if (ch === '{' || ch === '[') { depth++; if (depth === 1) { token = ''; continue } }
+    if (ch === '}' || ch === ']') depth--
+    if (depth === 1 && ch === ',') { token = ''; continue }
+    if (depth === 1 && ch === ':' && token.trim()) { keys.push(unquote(token)); token = '\u0000'; continue }
+    if (depth === 1 && token !== '\u0000') token += ch
+  }
+  return keys
+}
+
+/**
+ * The keys directly under the top-level `on:` (push, pull_request, schedule, workflow_dispatch, ...), in block form,
+ * as a list «on: [push, "pull_request"]», a single event «on: push», or a flow mapping «on: {schedule: [...]}».
+ */
 export function triggersOf(text) {
   const lines = codeLines(text)
   const out = new Set()
   const at = lines.findIndex((l) => /^(on|'on'|"on")\s*:/.test(l))
   if (at < 0) return out
   const inline = lines[at].replace(/^[^:]*:\s*/, '').trim()
+  if (inline.startsWith('{')) {
+    for (const k of flowKeys(inline)) out.add(k)
+    return out
+  }
   if (inline) {
-    // on: push   |   on: [push, pull_request]
-    for (const t of inline.replace(/[[\]]/g, '').split(',')) if (t.trim()) out.add(t.trim())
+    for (const t of inline.replace(/[[\]]/g, '').split(',')) if (unquote(t)) out.add(unquote(t))
     return out
   }
   let indent = null
@@ -65,10 +88,55 @@ export function triggersOf(text) {
     if (lead === 0) break
     if (indent === null) indent = lead
     if (lead !== indent) continue
-    const m = l.trim().match(/^([A-Za-z_]+)\s*:/)
-    if (m) out.add(m[1])
+    const m = l.trim().match(/^(['"]?)([A-Za-z_]+)\1\s*:/)
+    if (m) out.add(m[2])
   }
   return out
+}
+
+/**
+ * The workflow_dispatch inputs a workflow declares, by name: { required, hasDefault }. null when the workflow has no
+ * workflow_dispatch in block form under `on:` that this reader can follow (then nothing can be checked).
+ */
+export function dispatchInputsOf(text) {
+  const lines = codeLines(text)
+  const at = lines.findIndex((l) => /^(on|'on'|"on")\s*:/.test(l))
+  if (at < 0) return null
+  const inline = lines[at].replace(/^[^:]*:\s*/, '').trim()
+  if (inline.startsWith('{')) return null // a flow mapping: not followed here
+  if (inline) return triggersOf(text).has('workflow_dispatch') ? {} : null // «on: [push, workflow_dispatch]»: no inputs
+  let end = lines.findIndex((l, i) => i > at && !/^\s/.test(l))
+  if (end < 0) end = lines.length
+  const wd = lines.findIndex((l, i) => i > at && i < end && /^\s+['"]?workflow_dispatch['"]?\s*:/.test(l))
+  if (wd < 0) return null
+  const wdLead = lines[wd].match(/^\s*/)[0].length
+  const inputs = {}
+  const rest = lines[wd].replace(/^[^:]*:\s*/, '').trim()
+  if (/^(\{\s*\}|~|null)$/.test(rest)) return inputs // workflow_dispatch: {} - it takes no inputs
+  if (rest) return null // a flow mapping on one line: not followed here
+  {
+    // workflow_dispatch: followed by a block: read its `inputs:` block
+    let inLead = null
+    let current = null
+    let inInputs = false
+    for (const l of lines.slice(wd + 1)) {
+      const lead = l.match(/^\s*/)[0].length
+      if (lead <= wdLead) break
+      const t = l.trim()
+      if (!inInputs) { if (/^inputs\s*:\s*$/.test(t)) inInputs = true; continue }
+      if (inLead === null) inLead = lead
+      if (lead < inLead) break
+      if (lead === inLead) {
+        const m = t.match(/^(['"]?)([A-Za-z0-9_-]+)\1\s*:/)
+        current = m ? m[2] : null
+        if (current) inputs[current] = { required: false, hasDefault: false }
+      } else if (current) {
+        if (/^required\s*:\s*true\b/.test(t)) inputs[current].required = true
+        if (/^default\s*:/.test(t)) inputs[current].hasDefault = true
+      }
+    }
+  }
+  return inputs
 }
 
 /** What a class B release workflow still lacks to join Cockpit's release queue ([] = nothing). */
@@ -115,7 +183,10 @@ export function prWithoutCancel(workflowsDir) {
     if (at >= 0) for (const l of lines.slice(at + 1)) { if (!/^\s/.test(l)) break; block.push(l.trim()) }
     const group = (block.find((l) => l.startsWith('group:')) ?? '').slice('group:'.length).trim()
     const cancel = (block.find((l) => l.startsWith('cancel-in-progress:')) ?? '').slice('cancel-in-progress:'.length).trim()
-    const groupsByPr = /github\.ref\b|github\.event\.pull_request\.number|github\.head_ref/.test(group)
+    // A part that changes on every push or run (the commit, the run) gives each version its own group: nothing is
+    // ever cancelled, whatever cancel-in-progress says.
+    const perVersion = /github\.sha\b|github\.run_id|github\.run_number|github\.run_attempt|github\.event\.after\b|github\.event\.pull_request\.head\.sha|github\.event\.head_commit/.test(group)
+    const groupsByPr = !perVersion && /github\.ref\b|github\.event\.pull_request\.number|github\.head_ref/.test(group)
     const cancelsOnPr = cancel === 'true' || /^\$\{\{\s*github\.event_name\s*==\s*'pull_request'\s*\}\}$/.test(cancel)
     if (!groupsByPr || !cancelsOnPr) bad.push(f)
   }
@@ -156,6 +227,15 @@ export function checkDelivery(decl, workflowsDir) {
     const text = readWorkflow(workflowsDir, n.workflow)
     if (text === null) errors.push(`${where}: ${n.workflow} is not in .github/workflows`)
     else if (!triggersOf(text).has('workflow_dispatch')) errors.push(`${where}: ${n.workflow} has no workflow_dispatch, so Cockpit cannot start it`)
+    else if (isPlainObject(n.inputs)) {
+      // GitHub refuses a dispatch with an input the workflow does not declare, or without a required one (no default).
+      const declared = dispatchInputsOf(text)
+      if (declared === null) errors.push(`${where}: the inputs of ${n.workflow}'s workflow_dispatch cannot be read here; write it in block form`)
+      else {
+        for (const k of Object.keys(n.inputs)) if (!(k in declared)) errors.push(`${where}: ${n.workflow} declares no workflow_dispatch input «${k}», so GitHub would refuse the night run`)
+        for (const [k, v] of Object.entries(declared)) if (v.required && !v.hasDefault && !(k in n.inputs)) errors.push(`${where}: ${n.workflow} requires the input «${k}», which the night entry does not give`)
+      }
+    }
     if (typeof n.at_zurich !== 'string' || !HHMM.test(n.at_zurich)) errors.push(`${where}.at_zurich must be «HH:MM» Zurich time (it is ${JSON.stringify(n.at_zurich)})`)
     if (!isPlainObject(n.inputs) || Object.values(n.inputs).some((v) => typeof v !== 'string')) errors.push(`${where}.inputs must be an object of input names and plain string values`)
     if (n.label !== undefined && (typeof n.label !== 'string' || n.label.length < 1 || n.label.length > 200)) errors.push(`${where}.label must be 1-200 characters`)
