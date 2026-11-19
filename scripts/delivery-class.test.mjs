@@ -130,6 +130,15 @@ test('dispatchInputsOf reads an input whose settings sit on its own line (review
   assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, mode: { required: false, hasDefault: true }, note: { required: true, hasDefault: false } })
 })
 
+test('a quoted inputs key is read, and quoted text inside an inline input never counts (review round 3)', () => {
+  const quoted = 'on:\n  workflow_dispatch:\n    "inputs":\n      release_sha:\n        type: string\n      confirm:\n        type: string\njobs: {}\n'
+  assert.deepEqual(Object.keys(dispatchInputsOf(quoted)), ['release_sha', 'confirm'])
+  const single = "on:\n  workflow_dispatch:\n    'inputs':\n      sha: {type: string}\njobs: {}\n"
+  assert.deepEqual(Object.keys(dispatchInputsOf(single)), ['sha'])
+  const described = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: "leave empty, required: true is not set", type: string}\n      when: {description: \'say default: now\', type: string}\njobs: {}\n'
+  assert.deepEqual(dispatchInputsOf(described), { sha: { required: false, hasDefault: false }, when: { required: false, hasDefault: false } })
+})
+
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
   const dir = fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': RELEASE_WHEN_GREEN.replace('      pull-requests: read\n', '') })
   assert.equal(queueGaps(QUEUE_DEPLOY, dir).length, 1)

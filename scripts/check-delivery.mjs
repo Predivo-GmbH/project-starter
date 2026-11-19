@@ -124,7 +124,7 @@ export function dispatchInputsOf(text) {
       const lead = l.match(/^\s*/)[0].length
       if (lead <= wdLead) break
       const t = l.trim()
-      if (!inInputs) { if (/^inputs\s*:\s*$/.test(t)) inInputs = true; continue }
+      if (!inInputs) { if (/^(['"]?)inputs\1\s*:\s*$/.test(t)) inInputs = true; continue } // «inputs:», «"inputs":»
       if (inLead === null) inLead = lead
       if (lead < inLead) break
       if (lead === inLead) {
@@ -132,7 +132,8 @@ export function dispatchInputsOf(text) {
         current = m ? m[2] : null
         if (current) {
           // «sha: {type: string, required: true}»: the input's settings on its own line (review round 2, 19.11.2026)
-          const inline = m[3].trim().startsWith('{') ? m[3] : ''
+          // quoted text never counts: «{description: "x, required: true", type: string}» is not required (review round 3)
+          const inline = m[3].trim().startsWith('{') ? m[3].replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '""') : ''
           inputs[current] = { required: /[{,]\s*required\s*:\s*true\b/.test(inline), hasDefault: /[{,]\s*default\s*:/.test(inline) }
         }
       } else if (current) {
