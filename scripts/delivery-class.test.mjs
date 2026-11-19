@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, unreadableForm, stripComment as stripCommentForTest, pilotFields } from './check-delivery.mjs'
+import { checkDelivery, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, unreadableForm, stripComment as stripCommentForTest, pilotFields } from './check-delivery.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workflows = path.join(root, '.github', 'workflows')
@@ -93,36 +93,15 @@ test('class B needs a train time «HH:MM»', () => {
     const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: at }, dir)
     assert.ok(errs.some((e) => e.startsWith('class B needs train_at')), `${JSON.stringify(at)}: ${errs}`)
   }
-  assert.deepEqual(checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00', night_gates: 'always' }, dir), [])
+  const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00', night_gates: 'always' }, dir)
+  assert.deepEqual(errs.map((e) => e.split(':')[0]), ['class B is not available from this template yet'], errs.join('\n'))
 })
 
-test('class B is refused while the release workflow cannot join the release queue, naming each missing part', () => {
-  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY })
-  const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00' }, dir)
-  const gaps = errs.filter((e) => e.startsWith('class B cannot be carried out yet'))
-  assert.equal(gaps.length, 5, errs.join('\n'))
-  assert.ok(gaps.some((e) => e.includes('release_sha')))
-  assert.ok(gaps.some((e) => e.includes('no confirm input')))
-  assert.ok(gaps.some((e) => e.includes('confirm=gates')))
-  assert.ok(gaps.some((e) => e.includes('Night gates of')))
-  assert.ok(gaps.some((e) => e.includes('release-request')))
-})
-
-test('the queue parts count only in code, never in a comment', () => {
-  const commented = PLAIN_DEPLOY + "# release_sha: x\n# inputs.confirm == 'gates'\n# Night gates of\n"
-  const dir = fixture({ 'deploy.yml': commented, 'rwg.yml': '# node scripts/release-when-green.mjs request\n# id-token: write\n# pull-requests: read\n' })
-  assert.equal(queueGaps(commented, dir).length, 5)
-})
-
-test('release_sha and confirm count only as inputs under workflow_dispatch, never as a word elsewhere (review round 2)', () => {
-  const dir = fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': RELEASE_WHEN_GREEN })
-  const elsewhere = QUEUE_DEPLOY.replace('      confirm:\n        type: string\n      release_sha:\n        type: string\n', '      sha:\n        type: string\n')
-    .replace('jobs:\n', 'env:\n  release_sha: x\n  confirm: y\njobs:\n')
-  assert.notEqual(elsewhere, QUEUE_DEPLOY, 'the fixture changed')
-  const gaps = queueGaps(elsewhere, dir)
-  assert.ok(gaps.some((e) => e.includes('no release_sha input')), gaps.join('\n'))
-  assert.ok(gaps.some((e) => e.includes('no confirm input')), gaps.join('\n'))
-  assert.deepEqual(queueGaps(QUEUE_DEPLOY, dir), [])
+test('class B is refused, even with every release-queue part in its workflow, until the template carries that workflow (Codex round 7 on #15)', () => {
+  for (const deploy of [PLAIN_DEPLOY, QUEUE_DEPLOY]) {
+    const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00' }, fixture({ 'deploy.yml': deploy, 'release-when-green.yml': RELEASE_WHEN_GREEN }))
+    assert.ok(errs.some((e) => e.startsWith('class B is not available from this template yet')), errs.join('\n'))
+  }
 })
 
 test('an input whose settings sit on one line, or a flow on:, is refused with «write it in block form», never guessed (review of #15)', () => {
@@ -160,37 +139,14 @@ test('block form is read as YAML reads it: quoted keys, apostrophes, colons and 
   ].join('\n')
   assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, tag: { required: false, hasDefault: true }, note: { required: false, hasDefault: false } })
   assert.equal(unreadableForm(text), null)
-  // a comma and a quote inside plain text do not start a quoted value, so the comment after them is a comment (Codex round 4)
-  const commented = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", '    description: For example build," # inputs.confirm == \'gates\'')
-  assert.notEqual(commented, QUEUE_DEPLOY, 'the fixture changed')
-  const dir = fixture({ 'deploy.yml': commented, 'release-when-green.yml': RELEASE_WHEN_GREEN })
-  assert.ok(queueGaps(commented, dir).some((e) => e.includes('confirm=gates')), 'a gate condition in a comment was counted')
   assert.equal(stripCommentForTest('branches: [main, "x # y"] # z'), 'branches: [main, "x # y"] ', 'inside a flow list a quoted # stays, the trailing comment goes')
-  // a quoted value over two lines keeps its quote state: a comment after the closed value is a comment (round 5)
-  const across = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", "    description: \"first\n      'second\" # inputs.confirm == 'gates'")
-  assert.notEqual(across, QUEUE_DEPLOY, 'the fixture changed')
-  assert.ok(queueGaps(across, fixture({ 'deploy.yml': across, 'release-when-green.yml': RELEASE_WHEN_GREEN })).some((e) => e.includes('confirm=gates')), 'an apostrophe inside a two-line quoted value opened a quote and kept the comment after it')
-  const commentOnly = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", '    description: "a long text that goes on\n      and ends here"\n    note: x # inputs.confirm == \'gates\'')
-  assert.ok(queueGaps(commentOnly, fixture({ 'deploy.yml': commentOnly, 'release-when-green.yml': RELEASE_WHEN_GREEN })).some((e) => e.includes('confirm=gates')), 'a gate condition in a comment after a closed multi-line value counted')
-  // a block scalar's lines are literal: a # in a run script is not a comment, the release-request line counts
-  const run = RELEASE_WHEN_GREEN.replace('      - run: node scripts/release-when-green.mjs request', '      - run: |\n          echo "#1 then"\n          node scripts/release-when-green.mjs request')
-  assert.notEqual(run, RELEASE_WHEN_GREEN, 'the fixture changed')
-  assert.deepEqual(queueGaps(QUEUE_DEPLOY, fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': run })), [], 'a release-request inside a run block was missed')
-  // a shell comment in a run block is no hand-over (Codex round 6)
-  for (const commentedRun of ['          # node scripts/release-when-green.mjs request', '          echo skipped # node scripts/release-when-green.mjs request']) {
-    const shell = RELEASE_WHEN_GREEN.replace('      - run: node scripts/release-when-green.mjs request', '      - run: |\n          echo start\n' + commentedRun)
-    assert.notEqual(shell, RELEASE_WHEN_GREEN, 'the fixture changed')
-    assert.ok(queueGaps(QUEUE_DEPLOY, fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': shell })).some((e) => e.includes('release-request')), `a commented hand-over counted: ${commentedRun.trim()}`)
-  }
-  // a plain value continued on the next line: a quote there is text, the comment after it a comment (Codex round 6)
-  const continued = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", '    description: first part\n      "second # inputs.confirm == \'gates\'')
-  assert.notEqual(continued, QUEUE_DEPLOY, 'the fixture changed')
-  assert.ok(queueGaps(continued, fixture({ 'deploy.yml': continued, 'release-when-green.yml': RELEASE_WHEN_GREEN })).some((e) => e.includes('confirm=gates')), 'a quote on a plain value\'s next line opened a fake quote and kept the comment')
-})
-
-test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
-  const dir = fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': RELEASE_WHEN_GREEN.replace('      pull-requests: read\n', '') })
-  assert.equal(queueGaps(QUEUE_DEPLOY, dir).length, 1)
+  assert.equal(stripCommentForTest('description: For example build," # required: true'), 'description: For example build," ', 'a comma and a quote in plain text start no quoted value (round 4)')
+  // a quoted value over two lines is the value: a «required: true» inside it sets nothing (round 5)
+  const across = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: "first\n          required: true"\n      other:\n        type: string\njobs: {}\n'
+  assert.deepEqual(dispatchInputsOf(across), { sha: { required: false, hasDefault: false }, other: { required: false, hasDefault: false } })
+  // a run: | block is script text, left out of every structural check (round 7)
+  const scripted = 'on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - run: |\n          echo "#1"\n          schedule:\n          workflow_dispatch:\n'
+  assert.deepEqual([...triggersOf(scripted)], ['pull_request'])
 })
 
 test('a train time or night_gates outside class B is refused (Cockpit would ignore it)', () => {
