@@ -137,6 +137,9 @@ test('a quoted inputs key is read, and quoted text inside an inline input never 
   assert.deepEqual(Object.keys(dispatchInputsOf(single)), ['sha'])
   const described = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: "leave empty, required: true is not set", type: string}\n      when: {description: \'say default: now\', type: string}\njobs: {}\n'
   assert.deepEqual(dispatchInputsOf(described), { sha: { required: false, hasDefault: false }, when: { required: false, hasDefault: false } })
+  // an apostrophe inside a plain scalar is text, not a quote (Codex on #15)
+  const plain = "on:\n  workflow_dispatch:\n    inputs:\n      sha: {description: Don't skip this input, required: true, type: 'string'}\n      mode: {description: it's fast, default: fast}\njobs: {}\n"
+  assert.deepEqual(dispatchInputsOf(plain), { sha: { required: true, hasDefault: false }, mode: { required: false, hasDefault: true } })
 })
 
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {

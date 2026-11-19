@@ -132,8 +132,9 @@ export function dispatchInputsOf(text) {
         current = m ? m[2] : null
         if (current) {
           // «sha: {type: string, required: true}»: the input's settings on its own line (review round 2, 19.11.2026)
-          // quoted text never counts: «{description: "x, required: true", type: string}» is not required (review round 3)
-          const inline = m[3].trim().startsWith('{') ? m[3].replace(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g, '""') : ''
+          // quoted text never counts: «{description: "x, required: true", type: string}» is not required (review round 3);
+          // a quote counts only where a scalar starts (after «{», «,» or «:»), so «Don't» in a plain scalar is text (Codex on #15)
+          const inline = m[3].trim().startsWith('{') ? m[3].replace(/([{,:]\s*)("(?:[^"\\]|\\.)*"|'(?:[^']|'')*')/g, '$1""') : ''
           inputs[current] = { required: /[{,]\s*required\s*:\s*true\b/.test(inline), hasDefault: /[{,]\s*default\s*:/.test(inline) }
         }
       } else if (current) {
