@@ -1,7 +1,7 @@
 name: v11 Staging Gates
 
 # Runs the v11 hardened audit gates (e2e/staging/v11-gates.spec.ts) against the LIVE staging
-# site after every deploy + weekly. A red run IS the alert (same model as the fleet grant-drift
+# site after every deploy + every night (started by Cockpit, see `on:`). A red run IS the alert (same model as the fleet grant-drift
 # + gate-coverage guards). The production-monitor "v11 Gate Coverage Guard" checks that this
 # workflow exists and is green for every required app — so keep it here and keep it passing.
 #
@@ -15,8 +15,10 @@ on:
   workflow_run:
     workflows: ['Deploy'] # TODO(v11): match this project's deploy workflow `name:`
     types: [completed]
-  schedule:
-    - cron: '30 6 * * 1' # weekly Mon 06:30 UTC
+  # NO `schedule:` HERE (delivery plan, 17.11.2026): GitHub's schedule started night runs 6.5-9.5 hours late (measured
+  # 14.-17.11.2026) and skipped a night. Cockpit's release dispatcher starts this workflow every night instead, from the
+  # project's night list: the entry in .github/delivery.json (night) is added to Cockpit's run_queue_night when the
+  # project joins. scripts/check-delivery.mjs fails if a `schedule:` comes back.
   workflow_dispatch: {}
 
 concurrency:
