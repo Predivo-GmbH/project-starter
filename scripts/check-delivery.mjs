@@ -66,7 +66,8 @@ function flowKeys(inline) {
 
 /**
  * The keys directly under the top-level `on:` (push, pull_request, schedule, workflow_dispatch, ...), in block form,
- * as a list «on: [push, "pull_request"]», a single event «on: push», or a flow mapping «on: {schedule: [...]}».
+ * as a list «on: [push, "pull_request"]», a block list «on:\n  - push», a single event «on: push», or a flow mapping
+ * «on: {schedule: [...]}».
  */
 export function triggersOf(text) {
   const lines = codeLines(text)
@@ -85,10 +86,10 @@ export function triggersOf(text) {
   let indent = null
   for (const l of lines.slice(at + 1)) {
     const lead = l.match(/^\s*/)[0].length
-    if (lead === 0) break
+    if (lead === 0 && !/^-\s/.test(l)) break // a block list may sit at the key's own indent: «on:\n- push»
     if (indent === null) indent = lead
     if (lead !== indent) continue
-    const m = l.trim().match(/^(['"]?)([A-Za-z_]+)\1\s*:/)
+    const m = l.trim().match(/^(['"]?)([A-Za-z_]+)\1\s*:/) || l.trim().match(/^-\s*(['"]?)([A-Za-z_]+)\1\s*$/)
     if (m) out.add(m[2])
   }
   return out
@@ -108,7 +109,7 @@ export function dispatchInputsOf(text) {
   let end = lines.findIndex((l, i) => i > at && !/^\s/.test(l))
   if (end < 0) end = lines.length
   const wd = lines.findIndex((l, i) => i > at && i < end && /^\s+['"]?workflow_dispatch['"]?\s*:/.test(l))
-  if (wd < 0) return null
+  if (wd < 0) return triggersOf(text).has('workflow_dispatch') ? {} : null // «on:\n  - workflow_dispatch»: no inputs
   const wdLead = lines[wd].match(/^\s*/)[0].length
   const inputs = {}
   const rest = lines[wd].replace(/^[^:]*:\s*/, '').trim()
@@ -127,9 +128,13 @@ export function dispatchInputsOf(text) {
       if (inLead === null) inLead = lead
       if (lead < inLead) break
       if (lead === inLead) {
-        const m = t.match(/^(['"]?)([A-Za-z0-9_-]+)\1\s*:/)
+        const m = t.match(/^(['"]?)([A-Za-z0-9_-]+)\1\s*:\s*(.*)$/)
         current = m ? m[2] : null
-        if (current) inputs[current] = { required: false, hasDefault: false }
+        if (current) {
+          // «sha: {type: string, required: true}»: the input's settings on its own line (review round 2, 19.11.2026)
+          const inline = m[3].trim().startsWith('{') ? m[3] : ''
+          inputs[current] = { required: /[{,]\s*required\s*:\s*true\b/.test(inline), hasDefault: /[{,]\s*default\s*:/.test(inline) }
+        }
       } else if (current) {
         if (/^required\s*:\s*true\b/.test(t)) inputs[current].required = true
         if (/^default\s*:/.test(t)) inputs[current].hasDefault = true
@@ -144,7 +149,9 @@ export function queueGaps(deployText, workflowsDir) {
   const gaps = []
   const code = codeLines(deployText ?? '').join('\n')
   if (!triggersOf(deployText ?? '').has('workflow_dispatch')) gaps.push('the release workflow has no workflow_dispatch (Cockpit starts every production run with one)')
-  if (!/^\s+release_sha\s*:/m.test(code)) gaps.push('the release workflow has no release_sha input (the queue ships exactly the commit staging proved)')
+  const inputs = dispatchInputsOf(deployText ?? '') || {}
+  if (!inputs.release_sha) gaps.push('the release workflow has no release_sha input under workflow_dispatch (the queue ships exactly the commit staging proved)')
+  if (!inputs.confirm) gaps.push('the release workflow has no confirm input under workflow_dispatch (deploy, staging or gates: the release queue says which run it wants)')
   if (!/inputs\.confirm\s*==\s*'gates'/.test(code)) gaps.push("the release workflow does not run the night gates on confirm=gates (the dispatcher's night run)")
   if (!/Night gates of/.test(code)) gaps.push('the release workflow does not title a gates-only run «Night gates of <sha>» (production-monitor files it in the nightly lane)')
   const files = fs.existsSync(workflowsDir) ? fs.readdirSync(workflowsDir).filter((f) => /\.ya?ml(\.template)?$/.test(f)) : []
