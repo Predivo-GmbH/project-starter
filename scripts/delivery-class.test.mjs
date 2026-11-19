@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, pilotFields } from './check-delivery.mjs'
+import { checkDelivery, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, unreadableForm, stripComment as stripCommentForTest, pilotFields } from './check-delivery.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workflows = path.join(root, '.github', 'workflows')
@@ -93,46 +93,68 @@ test('class B needs a train time «HH:MM»', () => {
     const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: at }, dir)
     assert.ok(errs.some((e) => e.startsWith('class B needs train_at')), `${JSON.stringify(at)}: ${errs}`)
   }
-  assert.deepEqual(checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00', night_gates: 'always' }, dir), [])
+  const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00', night_gates: 'always' }, dir)
+  assert.deepEqual(errs.map((e) => e.split(':')[0]), ['class B is not available from this template yet'], errs.join('\n'))
 })
 
-test('class B is refused while the release workflow cannot join the release queue, naming each missing part', () => {
-  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY })
-  const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00' }, dir)
-  const gaps = errs.filter((e) => e.startsWith('class B cannot be carried out yet'))
-  assert.equal(gaps.length, 5, errs.join('\n'))
-  assert.ok(gaps.some((e) => e.includes('release_sha')))
-  assert.ok(gaps.some((e) => e.includes('no confirm input')))
-  assert.ok(gaps.some((e) => e.includes('confirm=gates')))
-  assert.ok(gaps.some((e) => e.includes('Night gates of')))
-  assert.ok(gaps.some((e) => e.includes('release-request')))
+test('class B is refused, even with every release-queue part in its workflow, until the template carries that workflow (Codex round 7 on #15)', () => {
+  for (const deploy of [PLAIN_DEPLOY, QUEUE_DEPLOY]) {
+    const errs = checkDelivery({ ...C_DECL, delivery_class: 'B', train_at: '03:00' }, fixture({ 'deploy.yml': deploy, 'release-when-green.yml': RELEASE_WHEN_GREEN }))
+    assert.ok(errs.some((e) => e.startsWith('class B is not available from this template yet')), errs.join('\n'))
+  }
 })
 
-test('the queue parts count only in code, never in a comment', () => {
-  const commented = PLAIN_DEPLOY + "# release_sha: x\n# inputs.confirm == 'gates'\n# Night gates of\n"
-  const dir = fixture({ 'deploy.yml': commented, 'rwg.yml': '# node scripts/release-when-green.mjs request\n# id-token: write\n# pull-requests: read\n' })
-  assert.equal(queueGaps(commented, dir).length, 5)
+test('an input whose settings sit on one line, or a flow on:, is refused with «write it in block form», never guessed (review of #15)', () => {
+  const inline = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {type: string, required: true}\njobs: {}\n'
+  assert.equal(dispatchInputsOf(inline), null)
+  assert.match(unreadableForm(inline), /input «sha» has its settings on one line/)
+  assert.match(unreadableForm('on:\n  workflow_dispatch: {inputs: {sha: {required: true}}}\njobs: {}\n'), /workflow_dispatch is written on one line/)
+  assert.match(unreadableForm('on:\n  workflow_dispatch:\n    inputs: {sha: {required: true}}\njobs: {}\n'), /inputs are written on one line/)
+  assert.match(unreadableForm('on: {pull_request: {}, push: {}}\njobs: {}\n'), /flow mapping/)
+  assert.equal(unreadableForm('on:\n  workflow_dispatch: {}\n  push:\n    branches: [main]\njobs: {}\n'), null, 'an empty workflow_dispatch is block form')
+  assert.equal(unreadableForm('on: [push, workflow_dispatch]\njobs: {}\n'), null)
+  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'night.yml': inline, 'pr.yml': 'on: {pull_request: {}}\njobs: {}\n' })
+  const errs = checkDelivery({ ...C_DECL, night: [{ workflow: 'night.yml', at_zurich: '02:00', inputs: { sha: 'x' } }] }, dir)
+  assert.ok(errs.some((e) => /^night\.yml: .*write it in block form/.test(e)), errs.join('\n'))
+  assert.ok(errs.some((e) => /^pr\.yml: its on: is a flow mapping .*write it in block form/.test(e)), errs.join('\n'))
 })
 
-test('release_sha and confirm count only as inputs under workflow_dispatch, never as a word elsewhere (review round 2)', () => {
-  const dir = fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': RELEASE_WHEN_GREEN })
-  const elsewhere = QUEUE_DEPLOY.replace('      confirm:\n        type: string\n      release_sha:\n        type: string\n', '      sha:\n        type: string\n')
-    .replace('jobs:\n', 'env:\n  release_sha: x\n  confirm: y\njobs:\n')
-  assert.notEqual(elsewhere, QUEUE_DEPLOY, 'the fixture changed')
-  const gaps = queueGaps(elsewhere, dir)
-  assert.ok(gaps.some((e) => e.includes('no release_sha input')), gaps.join('\n'))
-  assert.ok(gaps.some((e) => e.includes('no confirm input')), gaps.join('\n'))
-  assert.deepEqual(queueGaps(QUEUE_DEPLOY, dir), [])
-})
-
-test('dispatchInputsOf reads an input whose settings sit on its own line (review round 2)', () => {
-  const text = 'on:\n  workflow_dispatch:\n    inputs:\n      sha: {type: string, required: true}\n      mode: {type: string, default: fast}\n      note:\n        type: string\n        required: true\njobs: {}\n'
-  assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, mode: { required: false, hasDefault: true }, note: { required: true, hasDefault: false } })
-})
-
-test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
-  const dir = fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': RELEASE_WHEN_GREEN.replace('      pull-requests: read\n', '') })
-  assert.equal(queueGaps(QUEUE_DEPLOY, dir).length, 1)
+test('block form is read as YAML reads it: quoted keys, apostrophes, colons and quotes inside text, a quoted #, comments (review of #15)', () => {
+  const quoted = 'on:\n  workflow_dispatch:\n    "inputs":\n      release_sha:\n        type: string\n      confirm:\n        type: string\njobs: {}\n'
+  assert.deepEqual(Object.keys(dispatchInputsOf(quoted)), ['release_sha', 'confirm'])
+  const text = [
+    'on:',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      sha:',
+    "        description: Don't skip this, the prefix is ref:\"",
+    '        required: true # needed',
+    '      tag:',
+    '        description: "Use #tag, required: true is not set"',
+    "        default: '#1'",
+    '      note:',
+    '        description: say # required: true',
+    'jobs: {}',
+    '',
+  ].join('\n')
+  assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, tag: { required: false, hasDefault: true }, note: { required: false, hasDefault: false } })
+  assert.equal(unreadableForm(text), null)
+  assert.equal(stripCommentForTest('branches: [main, "x # y"] # z'), 'branches: [main, "x # y"] ', 'inside a flow list a quoted # stays, the trailing comment goes')
+  assert.equal(stripCommentForTest('description: For example build," # required: true'), 'description: For example build," ', 'a comma and a quote in plain text start no quoted value (round 4)')
+  // a value in the on: block that runs over several lines is refused, quoted or plain, so no continuation is ever read as
+  // an input's shape (Codex round 8)
+  const across = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: "first\n          required: true"\n      other:\n        type: string\njobs: {}\n'
+  assert.equal(dispatchInputsOf(across), null)
+  assert.match(unreadableForm(across), /runs over several lines .*write each value on one line/)
+  const plainSpill = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: first part\n          "second # required: true\njobs: {}\n'
+  assert.match(unreadableForm(plainSpill), /runs over several lines/)
+  const shaped = 'on:\n  workflow_dispatch:\n    inputs:\n      sha:\n        description: "first\n      other: {required: true}"\njobs: {}\n'
+  assert.match(unreadableForm(shaped), /runs over several lines|settings on one line/)
+  const dir = fixture({ 'deploy.yml': PLAIN_DEPLOY, 'night.yml': across })
+  assert.ok(checkDelivery({ ...C_DECL, night: [{ workflow: 'night.yml', at_zurich: '02:00', inputs: {} }] }, dir).some((e) => /^night\.yml: .*one line/.test(e)))
+  // a run: | block is script text, left out of every structural check (round 7)
+  const scripted = 'on:\n  pull_request:\njobs:\n  t:\n    steps:\n      - run: |\n          echo "#1"\n          schedule:\n          workflow_dispatch:\n'
+  assert.deepEqual([...triggersOf(scripted)], ['pull_request'])
 })
 
 test('a train time or night_gates outside class B is refused (Cockpit would ignore it)', () => {
@@ -192,7 +214,8 @@ test('triggersOf reads block, list and single forms of on:', () => {
   assert.deepEqual([...triggersOf('on: [push, pull_request]\n')], ['push', 'pull_request'])
   assert.deepEqual([...triggersOf('on: workflow_dispatch\n')], ['workflow_dispatch'])
   assert.deepEqual([...triggersOf('on: ["pull_request", \'push\']\n')], ['pull_request', 'push'])
-  assert.deepEqual([...triggersOf('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n')], ['schedule', 'workflow_dispatch'])
+  assert.deepEqual([...triggersOf('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n')], [], 'a flow on: is not guessed')
+  assert.match(unreadableForm('on: {schedule: [{cron: "0 2 * * *"}], "workflow_dispatch": {}}\n'), /flow mapping/)
   assert.deepEqual([...triggersOf('on:\n  "pull_request":\n  \'schedule\':\n    - cron: "0 2 * * *"\n')], ['pull_request', 'schedule'])
   assert.deepEqual([...triggersOf('on:\n  - push\n  - "pull_request"\njobs: {}\n')], ['push', 'pull_request'], 'a block list (review round 2)')
   assert.deepEqual([...triggersOf('on:\n- push\n- workflow_dispatch\njobs: {}\n')], ['push', 'workflow_dispatch'], 'a block list at the key\'s indent')

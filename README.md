@@ -131,10 +131,11 @@ every pull request.
 1. **`delivery_class`**: `A` client work (released on demand, full gates; not in Cockpit's release queue), `B` a live
    product (staging on every merge, production in one nightly train at `train_at`, «HH:MM» Zurich; a pull request
    labelled `hotfix` goes out at once), or `C` an internal tool (released whenever its tests are green).
-   **Class B is not available from this template yet:** the check refuses it until the release workflow joins Cockpit's
-   release queue (input `release_sha`, night gates on `confirm=gates` titled `Night gates of <sha>`, and a
-   `release-when-green.yml` that hands a green staging run to Cockpit's release-request). Until the template carries
-   that workflow, copy it from a class B product (ReplyFlow) and the check names any part still missing.
+   **Class B is not available from this template yet:** the check refuses it. The template does not carry the
+   release-queue workflow (input `release_sha`, night gates on `confirm=gates` titled `Night gates of <sha>`, and a
+   `release-when-green.yml` that hands a green staging run to Cockpit's release-request), and a check that reads
+   workflow text cannot prove that a night gates run never deploys. A product that needs class B before the template
+   carries that workflow is set up from a class B product's workflow (ReplyFlow) and reviewed on its own pull request.
 2. **`night`**: the heavy suites that run every night. Cockpit's release dispatcher starts them at `at_zurich`; no
    workflow keeps a `schedule:` for them (GitHub started scheduled runs 6.5-9.5 hours late). Only a light check such
    as `keep-alive.yml` may keep its schedule.
