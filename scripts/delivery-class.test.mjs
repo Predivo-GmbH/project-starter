@@ -166,6 +166,16 @@ test('block form is read as YAML reads it: quoted keys, apostrophes, colons and 
   const dir = fixture({ 'deploy.yml': commented, 'release-when-green.yml': RELEASE_WHEN_GREEN })
   assert.ok(queueGaps(commented, dir).some((e) => e.includes('confirm=gates')), 'a gate condition in a comment was counted')
   assert.equal(stripCommentForTest('branches: [main, "x # y"] # z'), 'branches: [main, "x # y"] ', 'inside a flow list a quoted # stays, the trailing comment goes')
+  // a quoted value over two lines keeps its quote state: a comment after the closed value is a comment (round 5)
+  const across = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", "    description: \"first\n      'second\" # inputs.confirm == 'gates'")
+  assert.notEqual(across, QUEUE_DEPLOY, 'the fixture changed')
+  assert.ok(queueGaps(across, fixture({ 'deploy.yml': across, 'release-when-green.yml': RELEASE_WHEN_GREEN })).some((e) => e.includes('confirm=gates')), 'an apostrophe inside a two-line quoted value opened a quote and kept the comment after it')
+  const commentOnly = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", '    description: "a long text that goes on\n      and ends here"\n    note: x # inputs.confirm == \'gates\'')
+  assert.ok(queueGaps(commentOnly, fixture({ 'deploy.yml': commentOnly, 'release-when-green.yml': RELEASE_WHEN_GREEN })).some((e) => e.includes('confirm=gates')), 'a gate condition in a comment after a closed multi-line value counted')
+  // a block scalar's lines are literal: a # in a run script is not a comment, the release-request line counts
+  const run = RELEASE_WHEN_GREEN.replace('      - run: node scripts/release-when-green.mjs request', '      - run: |\n          echo "#1 then"\n          node scripts/release-when-green.mjs request')
+  assert.notEqual(run, RELEASE_WHEN_GREEN, 'the fixture changed')
+  assert.deepEqual(queueGaps(QUEUE_DEPLOY, fixture({ 'deploy.yml': QUEUE_DEPLOY, 'release-when-green.yml': run })), [], 'a release-request inside a run block was missed')
 })
 
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {

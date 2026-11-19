@@ -47,10 +47,11 @@ export function readWorkflow(dir, name) {
  * a comment starts at «#» at the line's start or after a space, outside a quoted scalar; a quoted scalar starts where a
  * value starts (after the indentation, «- », «: », «{», «[» or «,»), so «Don't» or «ref:"» inside plain text is text.
  */
-export function stripComment(line) {
-  let quote = null
-  let valueStart = true
+export function stripComment(line, state = { quote: null }) {
+  let quote = state.quote // a quoted scalar opened on an earlier line is still open (Codex round 5 on #15)
+  let valueStart = quote === null
   let flow = 0 // depth of the flow collection ({...} / [...]) the scan is in; its punctuation only counts there
+  const done = (out) => { state.quote = quote; return out }
   for (let i = 0; i < line.length; i++) {
     const ch = line[i]
     if (quote) {
@@ -59,7 +60,7 @@ export function stripComment(line) {
       if (ch === quote) quote = null
       continue
     }
-    if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) return line.slice(0, i)
+    if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) return done(line.slice(0, i))
     if (/\s/.test(ch)) continue
     if ((ch === '"' || ch === "'") && valueStart) { quote = ch; valueStart = false; continue }
     if (ch === '-' && valueStart && /\s/.test(line[i + 1] ?? ' ')) continue
@@ -69,12 +70,31 @@ export function stripComment(line) {
     if (flow > 0 && (ch === '}' || ch === ']')) { flow--; valueStart = false; continue }
     valueStart = false
   }
-  return line
+  return done(line)
 }
 
-/** The workflow's lines without comments (a word in a comment never counts as a trigger or an input). */
+/**
+ * The workflow's lines without comments (a word in a comment never counts as a trigger or an input), read over the whole
+ * text (Codex round 5 on #15): a quoted value open at a line's end stays open on the next lines, and the lines of a block
+ * scalar («key: |», «- run: >-», with any indicators) are literal text: kept whole while they are indented deeper than
+ * its key (or blank), never cut at a «#».
+ */
 function codeLines(text) {
-  return text.split(/\r?\n/).map(stripComment).filter((l) => l.trim() !== '')
+  const out = []
+  const state = { quote: null }
+  let block = null // the indent a block scalar's lines must exceed, while inside one
+  for (const raw of String(text).split(/\r?\n/)) {
+    const lead = raw.match(/^\s*/)[0].length
+    if (block !== null) {
+      if (raw.trim() === '' || lead > block) { if (raw.trim() !== '') out.push(raw); continue }
+      block = null
+    }
+    const line = stripComment(raw, state)
+    if (line.trim() !== '') out.push(line)
+    // a block scalar starts here: «key: |», «key: >-», «- |2», a comment after it already gone
+    if (state.quote === null && /(^|:\s+|^\s*-\s+)[|>][0-9+-]*\s*$/.test(line)) block = lead
+  }
+  return out
 }
 
 const unquote = (s) => s.trim().replace(/^(['"])(.*)\1$/, '$2')
