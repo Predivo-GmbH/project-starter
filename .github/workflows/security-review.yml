@@ -4,6 +4,12 @@ on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
 
+# A new push to a pull request stops the run of its older version (delivery plan design 2, 17.11.2026: 42% of
+# pull-request test minutes ran on versions a newer push replaced). scripts/check-delivery.mjs checks this.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # SR-SUP-06: read-only by default; elevate only in the job that needs it.
 permissions:
   contents: read

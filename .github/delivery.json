@@ -1,0 +1,25 @@
+{
+  "$comment": [
+    "HOW THIS PROJECT IS DELIVERED (delivery plan step 7, 19.11.2026: «A new project joins by declaring two things: its",
+    "class and its path-to-suite map»). Checked by scripts/check-delivery.mjs on every pull request (guards.yml).",
+    "delivery_class: 'A' client work, released on demand with full gates; 'B' a live product: staging on every merge,",
+    "production in ONE nightly train that Cockpit's release queue starts at train_at (Zurich), a pull request labelled",
+    "«hotfix» goes at once; 'C' an internal tool, released whenever its tests are green.",
+    "Where the class is kept: Cockpit's run_queue_setting.pilot (fields delivery_class, train_at, night_gates). This file",
+    "is what the project declares; joining copies these fields into its pilot entry once (node scripts/check-delivery.mjs",
+    "--pilot <owner/repo> prints the entry), and from then on Cockpit's pilot entry decides.",
+    "night: the heavy night suites Cockpit's release dispatcher starts (its night list, run_queue_night). No workflow of",
+    "this project may start a heavy suite with GitHub's schedule: it starts them hours late.",
+    "suites: THE PATH-TO-SUITE MAP. Step 4 of the delivery plan (test each change once) defines its shape. Until then it",
+    "stays null and nothing reads it."
+  ],
+  "delivery_class": "C",
+  "workflow": "deploy.yml",
+  "branch": "main",
+  "train_at": null,
+  "night_gates": null,
+  "night": [
+    { "workflow": "staging-gates.yml", "at_zurich": "01:30", "inputs": {}, "label": "Staging gates (v11), every night" }
+  ],
+  "suites": null
+}

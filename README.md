@@ -25,6 +25,7 @@ Based on the [OneRedOak Claude Code Workflows](https://github.com/OneRedOak/clau
 | **Deploy Workflow (static)** | `.github/workflows/deploy.yml.template` | Metanet FTP zero-downtime deploy (lint→typecheck→test→build→FTP) |
 | **Deploy Workflow (Supabase-staged)** | `.github/workflows/deploy-supabase-staged.yml.template` | Full push→validate→staging→E2E chain, **manual prod gate**, pinned Supabase CLI + `--use-api`, retrying staging-alive check. Use for any Supabase-backed project. See `standards/deploy-standard.md`. |
 | **Live-asset guard** | `scripts/verify-live-assets.mjs`, `scripts/deploy-never-deletes-live-assets.test.mjs`, `.github/workflows/guards.yml` | Every deploy template's 14-day asset prune never deletes a file the build just uploaded, and each prune is followed by a check that the live pages load every file they reference (signalscore.ch ran unstyled for three days in Oct 2026 when a prune deleted its live stylesheet). The test pins both; `guards.yml` runs every offline `scripts/*.test.mjs` on each PR. |
+| **Delivery class** | `.github/delivery.json`, `scripts/check-delivery.mjs`, `scripts/delivery-class.test.mjs` | How the project is released: its class (A client work on demand, B live product in one nightly train with a hotfix path, C internal tool when green), its night runs for Cockpit's night list, and the place for the path-to-suite map (step 4 of the delivery plan). The check refuses a class the workflows cannot carry out, a heavy workflow on GitHub's schedule, and a pull-request workflow that does not stop a replaced version. See Step 2a. |
 | **Keep-Alive Workflow** | `.github/workflows/keep-alive.yml.template` | Ping Supabase free-tier every 2 days to prevent pause |
 | **Auth Helper** | `supabase/functions/_shared/auth.template.ts` | JWT auth + admin/user client factory for edge functions |
 | **CORS Helper** | `supabase/functions/_shared/cors.template.ts` | Dynamic CORS with origin allowlist |
@@ -120,6 +121,31 @@ cp /path/to/project-starter/e2e/staging/security-headers.spec.ts.template e2e/st
    - Either way: replace `{{PROD_DOMAIN}}` / `{{STAGING_DOMAIN}}` in `scripts/deploy-never-deletes-live-assets.test.mjs` (its `SITE` map) the same way, and list 3-5 real pages in each "Verify ... serves every file its pages need" step's `--pages`.
 5. **`.github/workflows/keep-alive.yml.template`** — Rename to `keep-alive.yml` (if Supabase free tier)
 6. **`supabase/functions/_shared/cors.ts`** — Replace `[SUBDOMAIN]` with your actual subdomain
+
+### Step 2a: Delivery class (every new project, before its first release)
+
+A project joins the delivery workflow by declaring two things in `.github/delivery.json`: its delivery class and its
+path-to-suite map. Run `node scripts/check-delivery.mjs` after every change to it; `guards.yml` runs the same check on
+every pull request.
+
+1. **`delivery_class`**: `A` client work (released on demand, full gates; not in Cockpit's release queue), `B` a live
+   product (staging on every merge, production in one nightly train at `train_at`, «HH:MM» Zurich; a pull request
+   labelled `hotfix` goes out at once), or `C` an internal tool (released whenever its tests are green).
+   **Class B is not available from this template yet:** the check refuses it until the release workflow joins Cockpit's
+   release queue (input `release_sha`, night gates on `confirm=gates` titled «Night gates of <sha>», and a
+   `release-when-green.yml` that hands a green staging run to Cockpit's release-request). Until the template carries
+   that workflow, copy it from a class B product (ReplyFlow) and the check names any part still missing.
+2. **`night`**: the heavy suites that run every night. Cockpit's release dispatcher starts them at `at_zurich`; no
+   workflow keeps a `schedule:` for them (GitHub started scheduled runs 6.5-9.5 hours late). Only a light check such
+   as `keep-alive.yml` may keep its schedule.
+3. **`suites`**: the path-to-suite map. It stays `null` until step 4 of the delivery plan (test each change once)
+   defines its shape.
+4. **Join Cockpit's release queue** (class B, and class C once its release workflow hands green releases to the
+   queue as the class B products do): `node scripts/check-delivery.mjs --pilot predivo-ch/<repo>`
+   prints the class fields for the project's entry in Cockpit's `run_queue_setting.pilot` (add `staging_minutes` and
+   `production_minutes` from the workflow's job time limits); add each `night` entry to Cockpit's `run_queue_night`.
+   From then on Cockpit's entry is where the class is kept. Cockpit's release-request also lists the repositories it
+   accepts (`REPOSITORIES` in `supabase/functions/release-request/request.ts`): the repository must be added there too.
 
 ### Step 2b: Lifecycle email (if the product has sign-ups)
 
