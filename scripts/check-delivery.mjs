@@ -47,9 +47,10 @@ export function readWorkflow(dir, name) {
  * a comment starts at «#» at the line's start or after a space, outside a quoted scalar; a quoted scalar starts where a
  * value starts (after the indentation, «- », «: », «{», «[» or «,»), so «Don't» or «ref:"» inside plain text is text.
  */
-function stripComment(line) {
+export function stripComment(line) {
   let quote = null
   let valueStart = true
+  let flow = 0 // depth of the flow collection ({...} / [...]) the scan is in; its punctuation only counts there
   for (let i = 0; i < line.length; i++) {
     const ch = line[i]
     if (quote) {
@@ -63,7 +64,9 @@ function stripComment(line) {
     if ((ch === '"' || ch === "'") && valueStart) { quote = ch; valueStart = false; continue }
     if (ch === '-' && valueStart && /\s/.test(line[i + 1] ?? ' ')) continue
     if (ch === ':' && /\s/.test(line[i + 1] ?? ' ')) { valueStart = true; continue }
-    if (ch === '{' || ch === '[' || ch === ',') { valueStart = true; continue }
+    if ((ch === '{' || ch === '[') && (valueStart || flow > 0)) { flow++; valueStart = true; continue }
+    if (flow > 0 && ch === ',') { valueStart = true; continue }
+    if (flow > 0 && (ch === '}' || ch === ']')) { flow--; valueStart = false; continue }
     valueStart = false
   }
   return line

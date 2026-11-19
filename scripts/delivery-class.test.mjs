@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, unreadableForm, pilotFields } from './check-delivery.mjs'
+import { checkDelivery, queueGaps, heavyScheduled, prWithoutCancel, triggersOf, dispatchInputsOf, unreadableForm, stripComment as stripCommentForTest, pilotFields } from './check-delivery.mjs'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const workflows = path.join(root, '.github', 'workflows')
@@ -160,6 +160,12 @@ test('block form is read as YAML reads it: quoted keys, apostrophes, colons and 
   ].join('\n')
   assert.deepEqual(dispatchInputsOf(text), { sha: { required: true, hasDefault: false }, tag: { required: false, hasDefault: true }, note: { required: false, hasDefault: false } })
   assert.equal(unreadableForm(text), null)
+  // a comma and a quote inside plain text do not start a quoted value, so the comment after them is a comment (Codex round 4)
+  const commented = QUEUE_DEPLOY.replace("    if: github.event.inputs.confirm == 'gates' || inputs.confirm == 'gates'", '    description: For example build," # inputs.confirm == \'gates\'')
+  assert.notEqual(commented, QUEUE_DEPLOY, 'the fixture changed')
+  const dir = fixture({ 'deploy.yml': commented, 'release-when-green.yml': RELEASE_WHEN_GREEN })
+  assert.ok(queueGaps(commented, dir).some((e) => e.includes('confirm=gates')), 'a gate condition in a comment was counted')
+  assert.equal(stripCommentForTest('branches: [main, "x # y"] # z'), 'branches: [main, "x # y"] ', 'inside a flow list a quoted # stays, the trailing comment goes')
 })
 
 test('the hand-over to the release queue needs pull-requests: read, or a hotfix could not be seen', () => {
