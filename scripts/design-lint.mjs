@@ -81,12 +81,14 @@ if (!resp || !resp.ok()) fail('reachable', `HTTP ${resp ? resp.status() : 'no re
 
 // Scroll top->bottom->top so framer-motion whileInView / IntersectionObserver content settles to opacity:1
 // (axe skips invisible nodes — without this the a11y scan gives a false clean).
-if (doScroll) {
-  await page.evaluate(async () => {
+const settle = async (p) => {
+  if (!doScroll) return;
+  await p.evaluate(async () => {
     for (let y = 0; y < document.body.scrollHeight; y += 400) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 100)); }
     window.scrollTo(0, 0); await new Promise(r => setTimeout(r, 400));
   });
-}
+};
+await settle(page);
 
 // --- Mechanical gates (KB) ---
 const m = await page.evaluate(({ maxHeroVh, heroSelector, ctaRegex, ctaFlags }) => {
@@ -160,8 +162,16 @@ try {
 } catch (e) { fail('perf:scan', `perf measurement failed: ${e.message}`); }
 
 // --- Mobile skim: H1/CTA above the fold at 390px ---
-await page.setViewportSize({ width: 390, height: 844 });
-const mob = await page.evaluate((ctaSrc) => {
+// On a page LOADED at 390x844, as a phone visitor gets it, with the desktop page's load and scroll. Until 20.11.2026 the
+// desktop page was resized to 390 and measured in the same instant, before its layout had settled: on the runner's
+// Linux Chromium, mitchind's start page read «Ort eingeben» at 1008 px in one run and 491 px in the next (staging runs
+// 44673855920, 44674290425, 44685555000 failed «mobile-cta-fold» on unchanged code). A blocking gate cannot be a coin toss.
+const mobile = await context.newPage();
+await mobile.setViewportSize({ width: 390, height: 844 });
+const mobResp = await mobile.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+if (!mobResp || !mobResp.ok()) fail('reachable', `HTTP ${mobResp ? mobResp.status() : 'no response'} at 390px`);
+await settle(mobile);
+const mob = await mobile.evaluate((ctaSrc) => {
   const vh = window.innerHeight;
   const cta = new RegExp(ctaSrc.regex, ctaSrc.flags);
   const above = sel => [...document.querySelectorAll(sel)].some(el => el.getBoundingClientRect().top < vh);
