@@ -38,4 +38,7 @@ test('the phone check loads its own page at 390x844 before measuring', () => {
   assert.ok(viewport >= 0, `${p} is not set to 390x844`)
   assert.ok(load > viewport, `${p} must be 390 px wide BEFORE it loads, so the page is never resized`)
   assert.ok(measure > load, `${p} is measured before it has loaded`)
+  assert.match(skim, new RegExp(`${p}\\.goto\\([^)]*waitUntil: 'networkidle'`), `${p} is not loaded to networkidle, as the desktop page is`)
+  const settled = skim.indexOf(`settle(${p})`)
+  assert.ok(settled > load && settled < measure, `${p} is not scrolled and settled between its load and its measurement`)
 })
